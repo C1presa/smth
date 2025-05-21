@@ -1,5 +1,5 @@
 import Unit from '../models/Unit.js';
-import { YAR_RANGE } from './constants.js';
+import { YAR_RANGE, ROWS } from './constants.js'; // Added ROWS
 
 // Check if a target is valid based on effect requirements
 export const isValidTarget = (effect, sourceUnit, targetUnit, gameState) => {
@@ -160,10 +160,10 @@ export const applySummonEffect = (effect, sourceUnit, gameState) => {
     attack: summonValue.attack,
     health: summonValue.health,
     type: summonValue.type,
-    cost: 1,
-    effects: [],
-    description: 'Summoned unit',
-    color: sourceUnit.color,
+    cost: 1, // Default cost for summoned units, can be overridden if specified in summonValue
+    effects: summonValue.effects || [], // Pass effects from definition
+    description: summonValue.description || 'Summoned unit',
+    color: sourceUnit.color, // Inherit color from summoner for consistency
     unitColor: sourceUnit.unitColor,
     highlightColor: sourceUnit.highlightColor,
     icon: sourceUnit.icon
@@ -244,9 +244,44 @@ export const applySacrificeEffect = (effect, target, gameState) => {
       const bonusResults = [];
       
       if (effect.bonusOnKill.draw) {
-        const drawEffect = { value: effect.bonusOnKill.draw };
-        const drawResults = applyDrawEffect(drawEffect, target, gameState);
+        // Create a simple effect object for drawing, target is the source of the draw for player context
+        const drawEffectValue = { value: effect.bonusOnKill.draw };
+        const drawResults = applyDrawEffect(drawEffectValue, target, gameState);
         bonusResults.push(...drawResults);
+      }
+      if (effect.bonusOnKill.damage) {
+        const damageEffect = effect.bonusOnKill.damage; // This is { value: X, targetType: Y, area: Z }
+        const damageTargets = [];
+        // Determine who the 'enemy' or 'ally' is relative to the sacrificed unit (target)
+        const sacrificedUnitPlayerId = target.player;
+
+        gameState.players.forEach(player => {
+          if (damageEffect.targetType === 'enemy' && player.id !== sacrificedUnitPlayerId) {
+            damageTargets.push(...player.units.filter(Boolean));
+          } else if (damageEffect.targetType === 'ally' && player.id === sacrificedUnitPlayerId) {
+            // This case might be unusual for a sacrifice bonus (damaging own units) but included for completeness
+            damageTargets.push(...player.units.filter(Boolean));
+          } else if (damageEffect.targetType === 'any') { // 'any' would target all units including the sacrificer's other units
+            damageTargets.push(...player.units.filter(Boolean));
+          }
+        });
+
+        if (damageTargets.length > 0) {
+          // applyDamageEffect expects an effect object containing 'value'
+          // and potentially other properties if its logic is more complex (e.g., filters).
+          // Here, we construct a minimal effect object for applyDamageEffect.
+          const effectForDamageApplication = { 
+            value: damageEffect.value 
+            // If applyDamageEffect needed 'area' or 'targetType' it should be passed from damageEffect here.
+            // However, applyDamageEffect typically gets a pre-filtered list of targets.
+          };
+          // For a sacrifice bonus, this is typically a new chain of events.
+          // If applyDamageEffect uses processedUnits to prevent re-processing, a new Set might be appropriate.
+          const damageResults = applyDamageEffect(effectForDamageApplication, damageTargets, gameState, new Set()); 
+          // Decide if these results need to be added to bonusResults or handled otherwise.
+          // For now, just logging that it happened.
+          console.log('Sacrifice bonus damage applied:', damageResults);
+        }
       }
       
       return { target, died: true, bonusResults };
@@ -268,114 +303,154 @@ export const executeWarshoutEffect = (effect, sourceUnit, targetUnit, gameState)
       row: sourceUnit.row,
       col: sourceUnit.col
     } : null,
-    targetUnit: targetUnit ? {
-      id: targetUnit.id,
-      name: targetUnit.cardName,
-      player: targetUnit.player,
-      row: targetUnit.row,
-      col: targetUnit.col
-    } : null
+    targetUnit: targetUnit ? { id: targetUnit.id, name: targetUnit.cardName, player: targetUnit.player, row: targetUnit.row, col: targetUnit.col } : null
   });
 
-  // If effect doesn't require targeting but has a target type and area
-  if (!effect.requiresTargeting && effect.targetType && effect.area === 'all') {
-    // Get all valid units matching the target type
-    const targets = [];
-    gameState.players.forEach(player => {
-      if ((effect.targetType === 'ally' && player.id === sourceUnit.player) ||
-          (effect.targetType === 'enemy' && player.id !== sourceUnit.player) ||
-          effect.targetType === 'any') {
-        
-        player.units.forEach(unit => {
-          // Skip null units
-          if (!unit) {
-            console.warn('Null unit found in player.units:', player.id);
-            return;
-          }
+  let actualTargets = [];
+  // This flag helps manage if we should proceed to the main action switch.
+  // It's not strictly necessary if all actions correctly handle empty actualTargets.
+  // let applyActionToTargets = true; 
 
-          // Apply additional filters if present
-          if (effect.filter) {
-            if (effect.filter.type && !unit.type.toLowerCase().includes(effect.filter.type.toLowerCase())) {
-              return;
-            }
-            if (effect.filter.minCost && unit.cost < effect.filter.minCost) {
-              return;
-            }
-            if (effect.filter.maxCost && unit.cost > effect.filter.maxCost) {
-              return;
-            }
-          }
-          
-          targets.push(unit);
-        });
-      }
-    });
-    
-    // Log targets for debugging
-    console.log('Effect targets:', targets.map(t => ({
-      id: t.id,
-      name: t.cardName,
-      player: t.player,
-      row: t.row,
-      col: t.col
-    })));
-    
-    // If no valid targets found, return early with a success message
-    if (targets.length === 0) {
-      console.log('No valid targets found for effect, returning early');
-      return { success: true, message: 'No valid targets found for effect' };
+  if (effect.requiresTargeting) {
+    if (!targetUnit) {
+      console.warn('Effect requires targeting but no target provided for effect:', effect);
+      return { success: false, reason: 'Effect requires targeting, no target provided' };
     }
-    
-    // Apply the effect to all targets
-    switch (effect.action) {
-      case 'damage': {
-        const result = applyDamageEffect(effect, targets, gameState);
-        if (!result.success) {
-          console.warn('Damage effect failed:', result.reason);
-          return result;
+    actualTargets = [targetUnit];
+  } else {
+    // No targeting required explicitly by player choice
+    if (effect.area === 'all') {
+      // Collect all units based on effect.targetType (ally, enemy, any)
+      gameState.players.forEach(player => {
+        let isCorrectPlayerType = false;
+        if (effect.targetType === 'ally' && player.id === sourceUnit.player) isCorrectPlayerType = true;
+        else if (effect.targetType === 'enemy' && player.id !== sourceUnit.player) isCorrectPlayerType = true;
+        else if (effect.targetType === 'any') isCorrectPlayerType = true;
+        // If no targetType specified for an 'all' area effect, it might imply all units of the source player, or all units globally.
+        // Current card definitions (e.g. Flame Guardian) specify targetType with area: 'all'.
+        // If a card had area:'all' and no targetType, sourceUnit.player's units is a safe assumption.
+        else if (!effect.targetType && player.id === sourceUnit.player) isCorrectPlayerType = true;
+
+
+        if (isCorrectPlayerType) {
+          player.units.forEach(unitOnBoard => {
+            if (!unitOnBoard) {
+              console.warn('Null unit found in player.units during AoE target collection:', player.id);
+              return; // Skip this null unit
+            }
+
+            let passesFilters = true;
+            // Apply additional filters if present (e.g., type, minCost, maxCost)
+            if (effect.filter) {
+              if (effect.filter.type && !unitOnBoard.type.toLowerCase().includes(effect.filter.type.toLowerCase())) {
+                passesFilters = false;
+              }
+              if (effect.filter.minCost && unitOnBoard.cost < effect.filter.minCost) {
+                passesFilters = false;
+              }
+              if (effect.filter.maxCost && unitOnBoard.cost > effect.filter.maxCost) {
+                passesFilters = false;
+              }
+              // Potentially add other filters here
+            }
+            if (passesFilters) {
+              actualTargets.push(unitOnBoard);
+            }
+          });
         }
-        return { success: true, results: result.results };
+      });
+
+      // Apply YAR filter if the effect has the YAR property and it's an AoE effect
+      if (effect.yar) {
+        const sourcePlayer = gameState.players.find(p => p.id === sourceUnit.player);
+        // Assuming player 1 spawn is row 4, player 2 is row 0. Needs to be robust if ROWS changes.
+        const spawnRow = sourcePlayer.id === 1 ? (gameState.board?.rows ?? ROWS) - 1 : 0; 
+        actualTargets = actualTargets.filter(t => Math.abs(t.row - spawnRow) <= YAR_RANGE);
       }
-      case 'heal':
-        return { success: true, results: applyHealEffect(effect, targets) };
-      case 'buff':
-        return { success: true, results: applyBuffEffect(effect, targets) };
-      default:
-        console.warn('Unknown action type:', effect.action);
-        return { success: false, reason: 'Unknown action type' };
+      
+      console.log(`Effect targets (AoE for ${effect.action}):`, actualTargets.map(t => ({ id: t.id, name: t.cardName })));
+      if (actualTargets.length === 0 && effect.action !== 'draw' && effect.action !== 'drawSpecific') {
+        // Don't stop for draw effects as they don't need targets. Summons also might not need board targets.
+        console.log('No valid targets found for AoE effect, returning early');
+        return { success: true, message: 'No valid targets found for AoE effect' };
+      }
+    } else {
+      // This branch handles effects that don't require targeting AND are not area: 'all'.
+      // Typically, these are self-targeting (e.g., Speed Demon's buff, Insect Swarm's summon).
+      // The target is the unit that generated the effect.
+      actualTargets = [sourceUnit];
     }
   }
   
-  // If effect requires targeting but no target provided
-  if (effect.requiresTargeting && !targetUnit) {
-    console.warn('Effect requires targeting but no target provided');
-    return { success: false, reason: 'Effect requires targeting' };
+  // Early exit if no targets for actions that absolutely require one.
+  // Draw, DrawSpecific, and Summon (which defaults to sourceUnit for placement context) can proceed.
+  if (actualTargets.length === 0 && !['draw', 'drawSpecific', 'summon'].includes(effect.action)) {
+    console.log('No actual targets for action:', effect.action, ' Source:', sourceUnit.cardName);
+    return { success: true, message: 'No targets for action.' };
   }
-  
+
   // Execute the effect based on action type
   switch (effect.action) {
-    case 'damage': {
-      if (!targetUnit) {
-        console.warn('Damage effect requires a target unit');
-        return { success: false, reason: 'No target unit provided' };
-      }
-      const result = applyDamageEffect(effect, [targetUnit], gameState);
-      if (!result.success) {
-        console.warn('Damage effect failed:', result.reason);
-        return result;
-      }
-      return { success: true, results: result.results };
-    }
+    case 'damage': 
+      // applyDamageEffect expects an array of targets.
+      return { success: true, results: applyDamageEffect(effect, actualTargets, gameState).results };
+    
     case 'heal':
-      return { success: true, results: applyHealEffect(effect, [targetUnit]) };
+      // applyHealEffect expects an array of targets.
+      return { success: true, results: applyHealEffect(effect, actualTargets) };
+    
     case 'buff':
-      return { success: true, results: applyBuffEffect(effect, [targetUnit]) };
-    case 'sacrifice':
-      return { success: true, result: applySacrificeEffect(effect, targetUnit, gameState) };
-    case 'summon':
-      return { success: true, result: applySummonEffect(effect, sourceUnit, gameState) };
-    case 'draw':
+      // applyBuffEffect expects an array of targets.
+      return { success: true, results: applyBuffEffect(effect, actualTargets) };
+    
+    case 'sacrifice': 
+      // Sacrifice should always have a single, specific target due to requiresTargeting: true.
+      // If actualTargets[0] is undefined here, it's an issue with prior logic or effect definition.
+      if (!actualTargets[0]) return {success: false, reason: "Sacrifice action missing target."};
+      return { success: true, result: applySacrificeEffect(effect, actualTargets[0], gameState) };
+    
+    case 'summon': {
+      const results = [];
+      const count = effect.count || 1; // Get count from effect, default to 1
+      for (let i = 0; i < count; i++) {
+        // Summons originate from the sourceUnit's position context.
+        const result = applySummonEffect(effect, sourceUnit, gameState); 
+        results.push(result); // Collect result of each summon attempt
+        if (!result.success) {
+            console.warn(`Summon ${i+1} of ${count} failed for ${sourceUnit.cardName}: ${result.reason}`);
+            // Optionally, break if one summon fails (e.g., no space)
+            // break; 
+        }
+      }
+      return { success: true, results };
+    }
+    
+    case 'draw': 
+      // Draw is for the sourceUnit's player.
       return { success: true, results: applyDrawEffect(effect, sourceUnit, gameState) };
+    
+    case 'compound':
+      // For effects like Ancient Bog Guardian (heal all allies + buff all allies)
+      if (effect.subEffects && Array.isArray(effect.subEffects)) {
+        const compoundResults = [];
+        effect.subEffects.forEach(subEffect => {
+          // actualTargets here would be all friendly units (filtered by YAR if applicable)
+          // Each subEffect is an object like { action: 'heal', value: 3 }
+          switch (subEffect.action) {
+            case 'heal':
+              compoundResults.push(...applyHealEffect(subEffect, actualTargets));
+              break;
+            case 'buff':
+              compoundResults.push(...applyBuffEffect(subEffect, actualTargets));
+              break;
+            // Extend with other actions if compound effects can do more
+            default:
+              console.warn('Unknown sub-action in compound effect:', subEffect.action);
+          }
+        });
+        return { success: true, results: compoundResults };
+      }
+      return { success: false, reason: 'Compound action missing or invalid subEffects' };
     case 'drawSpecific':
       return { success: true, results: applyDrawSpecificEffect(effect, sourceUnit, gameState) };
     default:
