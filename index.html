@@ -1,0 +1,27 @@
+<!-- Complete main HTML template for the game -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curve Game</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="src/responsive.css">
+    <script>
+      // Redirect to loading screen if not coming from it
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('fromLoading') !== '1') {
+        window.location.href = 'Loading.html';
+      }
+    </script>
+  </head>
+<body>
+  <div id="app">
+    <!-- Empty container that will be filled by JavaScript -->
+  </div>
+  
+  <!-- Add debug.js before main.js -->
+  <script type="module" src="src/debug.js"></script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

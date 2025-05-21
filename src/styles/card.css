@@ -1,0 +1,160 @@
+/* Card component styles */
+.card {
+  position: relative;
+  width: 200px;
+  height: 300px;
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  cursor: pointer;
+  user-select: none;
+}
+
+.card.active {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-large);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.card-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.card-cost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-bg-secondary);
+  border-radius: 50%;
+  font-weight: 700;
+  color: var(--color-text-accent);
+}
+
+.card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.card-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.card-attack,
+.card-health {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: var(--color-bg-secondary);
+  border-radius: 50%;
+  font-weight: 700;
+  color: var(--color-text-accent);
+}
+
+.card-attack {
+  border: 2px solid var(--color-effect-deathblow);
+}
+
+.card-health {
+  border: 2px solid var(--color-effect-taunt);
+}
+
+.card-effects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
+}
+
+.effect-value {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background-color: var(--color-bg-secondary);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-accent);
+}
+
+/* Card hover effects */
+.card:hover .card-name {
+  text-shadow: 0 0 8px currentColor;
+}
+
+.card:hover .card-cost,
+.card:hover .card-attack,
+.card:hover .card-health {
+  transform: scale(1.1);
+  transition: transform var(--timing-fast) var(--ease-bounce);
+}
+
+/* Card animations */
+@keyframes cardPlay {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.card.playing {
+  animation: cardPlay var(--timing-normal) var(--ease-bounce);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .card {
+    width: 160px;
+    height: 240px;
+    padding: var(--spacing-sm);
+  }
+  
+  .card-name {
+    font-size: 1rem;
+  }
+  
+  .card-cost,
+  .card-attack,
+  .card-health {
+    width: 20px;
+    height: 20px;
+    font-size: 0.875rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    width: 140px;
+    height: 210px;
+  }
+  
+  .card-name {
+    font-size: 0.875rem;
+  }
+  
+  .card-effects {
+    gap: var(--spacing-xs);
+  }
+} 

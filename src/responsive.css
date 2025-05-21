@@ -1,0 +1,175 @@
+/* src/responsive.css */
+/* Responsive adjustments for different screen sizes */
+
+/* Mobile devices (portrait) */
+@media screen and (max-width: 640px) {
+    .game-content {
+      display: flex;
+      flex-direction: column;
+      padding: 5px;
+      gap: 5px;
+    }
+    
+    .player-stats-area {
+      flex-direction: column;
+      gap: 5px;
+    }
+    
+    .game-board {
+      height: 50vh;
+    }
+    
+    .game-log {
+      height: 150px;
+    }
+    
+    .player-hand {
+      overflow-x: auto;
+      justify-content: flex-start;
+      padding: 5px;
+    }
+    
+    .card {
+      width: 100px;
+      height: 150px;
+      padding: 5px;
+    }
+    
+    .card-description {
+      font-size: 0.6rem;
+    }
+    
+    .end-turn-button {
+      position: static;
+      width: 100%;
+      margin-top: 10px;
+    }
+    
+    .deck-builder-content {
+      grid-template-columns: 1fr;
+    }
+    
+    .cards-grid {
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+  }
+  
+  /* Tablets and small laptops */
+  @media screen and (min-width: 641px) and (max-width: 1024px) {
+    .game-content {
+      grid-template-columns: 1fr 250px;
+      grid-template-areas:
+        "players log"
+        "board log"
+        "hand log";
+    }
+    
+    .player1-graveyard, .player2-graveyard {
+      display: none;
+    }
+    
+    .player-stats {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .deck-builder-content {
+      grid-template-columns: 2fr 1fr;
+    }
+  }
+  
+  /* Large desktop monitors */
+  @media screen and (min-width: 1440px) {
+    .game-content {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+    
+    .card {
+      width: 140px;
+      height: 200px;
+    }
+    
+    .card-image {
+      height: 60px;
+      font-size: 2.5rem;
+    }
+    
+    .card-description {
+      font-size: 0.8rem;
+    }
+  }
+  
+  /* Dark mode preferences */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-panel: #1e293b;
+      --text-light: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-subtle: #334155;
+    }
+  }
+  
+  /* Light mode preferences */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg-dark: #f1f5f9;
+      --bg-card: #e2e8f0;
+      --bg-panel: #e2e8f0;
+      --text-light: #0f172a;
+      --text-muted: #475569;
+      --border-subtle: #cbd5e1;
+    }
+    
+    body {
+      color: var(--text-light);
+    }
+    
+    .game-tile {
+      background-color: #cbd5e1;
+    }
+    
+    .spawn-player1 {
+      background-color: rgba(239, 68, 68, 0.2);
+    }
+    
+    .spawn-player2 {
+      background-color: rgba(59, 130, 246, 0.2);
+    }
+  }
+  
+  /* High contrast mode */
+  @media (prefers-contrast: high) {
+    :root {
+      --bg-dark: #000000;
+      --bg-card: #222222;
+      --bg-panel: #222222;
+      --text-light: #ffffff;
+      --text-muted: #cccccc;
+      --border-subtle: #666666;
+      --player1-color: #ff0000;
+      --player2-color: #0000ff;
+    }
+    
+    .game-tile {
+      border: 2px solid white;
+    }
+    
+    .valid-move, .valid-target {
+      border: 3px solid yellow;
+    }
+    
+    .card {
+      border: 2px solid white;
+    }
+  }
+  
+  /* Reduced motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }

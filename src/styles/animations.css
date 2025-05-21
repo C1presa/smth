@@ -1,0 +1,180 @@
+/* Base animation effects */
+.attack-effect,
+.deathstrike-skull,
+.card-play-effect,
+.warshout-effect,
+.deathblow-effect,
+.taunt-effect {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* Attack animation */
+.attack-effect {
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, #ff4444 0%, transparent 70%);
+  border-radius: 50%;
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.attack-impact {
+  position: fixed;
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle, #ff0000 0%, transparent 70%);
+  border-radius: 50%;
+  animation: impact 0.5s ease-out forwards;
+}
+
+/* Deathstrike animation */
+.deathstrike-skull {
+  font-size: 24px;
+  opacity: 0;
+  transform: scale(0.5) rotate(0deg);
+  filter: drop-shadow(0 0 5px rgba(255, 0, 0, 0.5));
+}
+
+.deathstrike-impact {
+  position: fixed;
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, #ff0000 0%, transparent 70%);
+  border-radius: 50%;
+  animation: deathstrike-impact 0.5s ease-out forwards;
+}
+
+/* Card play animation */
+.card-play-effect {
+  background: linear-gradient(45deg, #4a90e2, #67b26f);
+  border-radius: 8px;
+  opacity: 0.8;
+  box-shadow: 0 0 20px rgba(74, 144, 226, 0.5);
+}
+
+.card-play-impact {
+  position: fixed;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(74, 144, 226, 0.8) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: card-impact 0.5s ease-out forwards;
+}
+
+/* Warshout animation */
+.warshout-effect {
+  width: 0;
+  height: 0;
+}
+
+.warshout-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 2px solid #ffd700;
+  border-radius: 50%;
+  animation: warshout-ring 1s ease-out forwards;
+}
+
+/* Deathblow animation */
+.deathblow-effect {
+  width: 0;
+  height: 0;
+}
+
+.deathblow-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: #ff0000;
+  border-radius: 50%;
+  transform-origin: center;
+  animation: deathblow-particle 1s ease-out forwards;
+}
+
+/* Taunt animation */
+.taunt-effect {
+  width: 0;
+  height: 0;
+}
+
+.taunt-shield {
+  position: absolute;
+  font-size: 32px;
+  animation: taunt-shield 1s ease-out forwards;
+}
+
+/* Animation keyframes */
+@keyframes impact {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes deathstrike-impact {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+    filter: brightness(1);
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+    filter: brightness(2);
+  }
+}
+
+@keyframes card-impact {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes warshout-ring {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes deathblow-particle {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(cos(var(--angle)) * 100px), calc(sin(var(--angle)) * 100px)) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes taunt-shield {
+  0% {
+    transform: scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) rotate(180deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(360deg);
+    opacity: 0;
+  }
+} 

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CURVE GAME - Loading</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* Starry background */
+        .starry-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at top, #1e40af 0%, #1e1b4b 50%, #020617 100%);
+            z-index: 1;
+        }
+
+        .starry-background::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, #fff, transparent),
+                radial-gradient(2px 2px at 40px 70px, #fff, transparent),
+                radial-gradient(1px 1px at 90px 40px, #fff, transparent),
+                radial-gradient(1px 1px at 130px 80px, #fff, transparent),
+                radial-gradient(2px 2px at 160px 30px, #fff, transparent);
+            background-repeat: repeat;
+            background-size: 200px 100px;
+            animation: sparkle 3s linear infinite;
+        }
+
+        .starry-background::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                radial-gradient(1px 1px at 300px 200px, #fff, transparent),
+                radial-gradient(1px 1px at 500px 100px, #fff, transparent),
+                radial-gradient(1px 1px at 800px 300px, #fff, transparent),
+                radial-gradient(2px 2px at 1000px 150px, #fff, transparent);
+            background-repeat: repeat;
+            background-size: 300px 200px;
+            animation: sparkle 2s linear infinite reverse;
+        }
+
+        @keyframes sparkle {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+
+        /* Main content container */
+        .content {
+            z-index: 10;
+            text-align: center;
+            position: relative;
+        }
+
+        /* Main title styling */
+        .main-title {
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: 0.3rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(45deg, #fbbf24, #f97316, #ef4444, #fbbf24);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: colorShift 3s ease-in-out infinite, glow 2s ease-in-out infinite alternate;
+            text-shadow: 0 0 30px rgba(251, 191, 36, 0.6);
+            position: relative;
+        }
+
+        /* Sword icon styling */
+        .sword-icon {
+            display: inline-block;
+            font-size: 3.5rem;
+            margin: 0 0.2rem;
+            filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.8));
+            animation: swordGlow 2s ease-in-out infinite alternate;
+        }
+
+        /* Author text */
+        .author {
+            font-size: 1.2rem;
+            color: #b0bec5;
+            font-weight: 300;
+            letter-spacing: 0.1rem;
+            opacity: 0.8;
+            margin-top: 1rem;
+        }
+
+        /* Version text */
+        .version {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.9rem;
+            color: #546e7a;
+            font-weight: 300;
+        }
+
+        /* Loading animation */
+        .loading-container {
+            margin-top: 3rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .loading-text {
+            color: #90a4ae;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            letter-spacing: 0.1rem;
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #fbbf24, #f97316, #fbbf24);
+            background-size: 200% 100%;
+            border-radius: 2px;
+            animation: loadingProgress 2s ease-in-out infinite, loadingShimmer 1.5s linear infinite;
+            width: 0%;
+        }
+
+        /* Floating particles */
+        .particle {
+            position: absolute;
+            background: #fbbf24;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: float 6s linear infinite;
+            box-shadow: 0 0 10px #f97316;
+        }
+
+        .particle:nth-child(1) {
+            width: 3px;
+            height: 3px;
+            left: 10%;
+            animation-delay: 0s;
+            animation-duration: 8s;
+        }
+
+        .particle:nth-child(2) {
+            width: 2px;
+            height: 2px;
+            left: 20%;
+            animation-delay: 1s;
+            animation-duration: 6s;
+        }
+
+        .particle:nth-child(3) {
+            width: 4px;
+            height: 4px;
+            left: 30%;
+            animation-delay: 2s;
+            animation-duration: 7s;
+        }
+
+        .particle:nth-child(4) {
+            width: 2px;
+            height: 2px;
+            left: 70%;
+            animation-delay: 0.5s;
+            animation-duration: 9s;
+        }
+
+        .particle:nth-child(5) {
+            width: 3px;
+            height: 3px;
+            left: 80%;
+            animation-delay: 1.5s;
+            animation-duration: 5s;
+        }
+
+        /* Animations */
+        @keyframes colorShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        @keyframes glow {
+            0% { 
+                text-shadow: 0 0 30px rgba(255, 215, 0, 0.5),
+                            0 0 60px rgba(255, 215, 0, 0.3),
+                            0 0 90px rgba(255, 215, 0, 0.1);
+            }
+            100% { 
+                text-shadow: 0 0 40px rgba(255, 215, 0, 0.8),
+                            0 0 80px rgba(255, 215, 0, 0.6),
+                            0 0 120px rgba(255, 215, 0, 0.3);
+            }
+        }
+
+        @keyframes swordGlow {
+            0% { 
+                filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.8));
+            }
+            100% { 
+                filter: drop-shadow(0 0 30px rgba(255, 215, 0, 1))
+                       drop-shadow(0 0 40px rgba(255, 107, 53, 0.5));
+            }
+        }
+
+        @keyframes loadingProgress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+
+        @keyframes loadingShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100vh) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .main-title {
+                font-size: 2.5rem;
+                letter-spacing: 0.2rem;
+            }
+            
+            .sword-icon {
+                font-size: 2.2rem;
+            }
+            
+            .author {
+                font-size: 1rem;
+            }
+            
+            .loading-bar {
+                width: 250px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-title {
+                font-size: 2rem;
+                letter-spacing: 0.1rem;
+            }
+            
+            .sword-icon {
+                font-size: 1.8rem;
+            }
+            
+            .loading-bar {
+                width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Starry background -->
+    <div class="starry-background"></div>
+    
+    <!-- Floating particles -->
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+
+    <!-- Main content -->
+    <div class="content">
+        <h1 class="main-title">
+            CURVE<span class="sword-icon">⚔️</span>GAME
+        </h1>
+        <p class="author">by Kustr</p>
+        
+        <div class="loading-container">
+            <p class="loading-text">Loading...</p>
+            <div class="loading-bar">
+                <div class="loading-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Version info -->
+    <div class="version">v1.0.0</div>
+
+    <script>
+        // Simulate loading progress
+        let progress = 0;
+        const progressBar = document.querySelector('.loading-progress');
+        const loadingText = document.querySelector('.loading-text');
+        
+        const loadingMessages = [
+            'Loading...',
+            'Initializing game...',
+            'Loading cards...',
+            'Preparing battlefield...',
+            'Ready!'
+        ];
+        
+        let messageIndex = 0;
+        
+        function updateProgress() {
+            progress += Math.random() * 15 + 5;
+            if (progress > 100) progress = 100;
+            
+            progressBar.style.width = progress + '%';
+            
+            // Update loading message based on progress
+            const newMessageIndex = Math.floor((progress / 100) * (loadingMessages.length - 1));
+            if (newMessageIndex !== messageIndex) {
+                messageIndex = newMessageIndex;
+                loadingText.textContent = loadingMessages[messageIndex];
+            }
+            
+            if (progress < 100) {
+                setTimeout(updateProgress, Math.random() * 300 + 200);
+            } else {
+                // Freeze the bar at 100%
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    loadingText.textContent = 'Click to continue to main menu';
+                    document.body.style.cursor = 'pointer';
+                    // Hide the loading bar
+                    document.querySelector('.loading-bar').style.display = 'none';
+                    document.body.addEventListener('click', () => {
+                        document.body.style.transition = 'opacity 1s ease-out';
+                        document.body.style.opacity = '0';
+                        setTimeout(() => {
+                            // Redirect to root with a flag so it doesn't redirect back to loading
+                            window.location.href = '/?fromLoading=1';
+                        }, 1000);
+                    }, { once: true });
+                }, 500);
+            }
+        }
+        
+        // Start loading simulation
+        setTimeout(updateProgress, 500);
+        
+        // Add some random sparkle effects
+        function createSparkle() {
+            const sparkle = document.createElement('div');
+            sparkle.style.position = 'absolute';
+            sparkle.style.width = '2px';
+            sparkle.style.height = '2px';
+            sparkle.style.background = '#fff';
+            sparkle.style.borderRadius = '50%';
+            sparkle.style.left = Math.random() * 100 + '%';
+            sparkle.style.top = Math.random() * 100 + '%';
+            sparkle.style.animation = 'sparkle 2s linear forwards';
+            sparkle.style.zIndex = '5';
+            
+            document.body.appendChild(sparkle);
+            
+            setTimeout(() => {
+                sparkle.remove();
+            }, 2000);
+        }
+        
+        // Create sparkles periodically
+        setInterval(createSparkle, 300);
+    </script>
+</body>
+</html>

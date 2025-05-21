@@ -1,0 +1,202 @@
+/* Theme variables */
+:root {
+  /* Primary colors - rich, more saturated */
+  --color-primary: #3b82f6;
+  --color-secondary: #22c55e;
+  --color-accent: #f97316;
+  
+  /* Background colors - deeper blues for better contrast */
+  --color-background: #0f172a;
+  --color-surface: #1e293b;
+  --color-surface-variant: #334155;
+  
+  /* Text colors - improved contrast */
+  --color-text: #f8fafc;
+  --color-text-secondary: #cbd5e1;
+  --color-border: #475569;
+
+  /* Player colors - more vibrant */
+  --player1-color: #ef4444;
+  --player2-color: #3b82f6;
+
+  /* Archetype colors - richer hues */
+  --archetype-nether: #a21caf;
+  --archetype-swamp: #16a34a;
+  --archetype-racetrack: #f59e0b;
+  --archetype-elderwood: #22d3ee;
+  --archetype-neutral: #64748b;
+  
+  /* Effect colors - more vibrant */
+  --effect-strike: #FF9500;
+  --effect-deathstrike: #A855F7;
+  --effect-deathblow: #F43F5E;
+  --effect-taunt: #FBBF24;
+  --effect-warshout: #38BDF8;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+/* Theme-specific styles */
+.theme-nether {
+  --color-primary: var(--archetype-nether);
+  --color-secondary: #9b59b6;
+  --color-accent: #8e44ad;
+}
+
+.theme-swamp {
+  --color-primary: var(--archetype-swamp);
+  --color-secondary: #2ecc71;
+  --color-accent: #27ae60;
+}
+
+.theme-racetrack {
+  --color-primary: var(--archetype-racetrack);
+  --color-secondary: #f1c40f;
+  --color-accent: #d35400;
+}
+
+.theme-elderwood {
+  --color-primary: var(--archetype-elderwood);
+  --color-secondary: #1abc9c;
+  --color-accent: #16a085;
+}
+
+.theme-neutral {
+  --color-primary: var(--archetype-neutral);
+  --color-secondary: #7f8c8d;
+  --color-accent: #95a5a6;
+}
+
+/* Card themes */
+.card.theme-nether {
+  background: linear-gradient(135deg, var(--archetype-nether), #581c87);
+  border-color: #c026d3;
+  box-shadow: 0 4px 12px rgba(162, 28, 175, 0.3);
+}
+
+.card.theme-swamp {
+  background: linear-gradient(135deg, var(--archetype-swamp), #14532d);
+  border-color: #22c55e;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+}
+
+.card.theme-racetrack {
+  background: linear-gradient(135deg, var(--archetype-racetrack), #b45309);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.card.theme-elderwood {
+  background: linear-gradient(135deg, var(--archetype-elderwood), #0e7490);
+  border-color: #22d3ee;
+  box-shadow: 0 4px 12px rgba(34, 211, 238, 0.3);
+}
+
+.card.theme-neutral {
+  background: linear-gradient(135deg, var(--archetype-neutral), #334155);
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(148, 163, 184, 0.3);
+}
+
+/* Player themes */
+.player1 {
+  --player-color: var(--player1-color);
+}
+
+.player2 {
+  --player-color: var(--player2-color);
+}
+
+/* Effect themes */
+.effect-nether {
+  background-color: var(--archetype-nether);
+  box-shadow: 0 0 10px var(--archetype-nether);
+}
+
+.effect-swamp {
+  background-color: var(--archetype-swamp);
+  box-shadow: 0 0 10px var(--archetype-swamp);
+}
+
+.effect-racetrack {
+  background-color: var(--archetype-racetrack);
+  box-shadow: 0 0 10px var(--archetype-racetrack);
+}
+
+.effect-elderwood {
+  background-color: var(--archetype-elderwood);
+  box-shadow: 0 0 10px var(--archetype-elderwood);
+}
+
+.effect-neutral {
+  background-color: var(--archetype-neutral);
+  box-shadow: 0 0 10px var(--archetype-neutral);
+}
+
+/* Animation themes */
+@keyframes nether-pulse {
+  0% { box-shadow: 0 0 5px var(--archetype-nether); }
+  50% { box-shadow: 0 0 25px var(--archetype-nether); }
+  100% { box-shadow: 0 0 5px var(--archetype-nether); }
+}
+
+@keyframes swamp-pulse {
+  0% { box-shadow: 0 0 5px var(--archetype-swamp); }
+  50% { box-shadow: 0 0 25px var(--archetype-swamp); }
+  100% { box-shadow: 0 0 5px var(--archetype-swamp); }
+}
+
+@keyframes racetrack-pulse {
+  0% { box-shadow: 0 0 5px var(--archetype-racetrack); }
+  50% { box-shadow: 0 0 25px var(--archetype-racetrack); }
+  100% { box-shadow: 0 0 5px var(--archetype-racetrack); }
+}
+
+@keyframes elderwood-pulse {
+  0% { box-shadow: 0 0 5px var(--archetype-elderwood); }
+  50% { box-shadow: 0 0 25px var(--archetype-elderwood); }
+  100% { box-shadow: 0 0 5px var(--archetype-elderwood); }
+}
+
+@keyframes neutral-pulse {
+  0% { box-shadow: 0 0 5px var(--archetype-neutral); }
+  50% { box-shadow: 0 0 20px var(--archetype-neutral); }
+  100% { box-shadow: 0 0 5px var(--archetype-neutral); }
+}
+
+/* Theme-specific animations */
+.theme-nether .card {
+  animation: nether-pulse 3s infinite;
+}
+
+.theme-swamp .card {
+  animation: swamp-pulse 3s infinite;
+}
+
+.theme-racetrack .card {
+  animation: racetrack-pulse 3s infinite;
+}
+
+.theme-elderwood .card {
+  animation: elderwood-pulse 3s infinite;
+}
+
+.theme-neutral .card {
+  animation: neutral-pulse 2s infinite;
+} 

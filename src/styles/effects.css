@@ -1,0 +1,374 @@
+/* Effect Icons and Styles */
+.effect-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  margin: 0 3px;
+  font-size: 14px;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+}
+
+.effect-icon:hover {
+  transform: scale(1.2) translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.effect-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: normal;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.effect-icon:hover::after {
+  opacity: 1;
+  visibility: visible;
+  bottom: calc(100% + 10px);
+}
+
+/* Effect Types */
+.effect-taunt {
+  background: #fbbf24;
+  color: #78350f;
+}
+
+.effect-warshout {
+  background: #3b82f6;
+  color: #1e40af;
+}
+
+.effect-deathblow {
+  background: #ef4444;
+  color: #7f1d1d;
+}
+
+.effect-deathstrike {
+  background: #8b5cf6;
+  color: #4c1d95;
+}
+
+.effect-strike {
+  background: #22c55e;
+  color: #14532d;
+}
+
+/* Effect Container */
+.effect-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 16px;
+  min-height: 28px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* "No effects" state */
+.no-effects {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Active Effect States */
+.effect-icon.active {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+/* --- Effect Animations --- */
+.effect-animation {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.particle-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.particle.lightning {
+  width: 3px;
+  height: 15px;
+  background: linear-gradient(to bottom, #FFB800, #FF9500);
+  border-radius: 1px;
+  transform-origin: center bottom;
+  animation: lightning-rise 0.7s ease-out forwards;
+}
+
+@keyframes lightning-rise {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x-offset), -40px) rotate(var(--rotation)) scale(0.5);
+  }
+}
+
+.particle.purple-spark {
+  background: linear-gradient(45deg, #C084FC, #8B5CF6);
+  width: 6px;
+  height: 6px;
+  filter: blur(1px);
+  animation: spark-explode 1s ease-out forwards;
+}
+
+@keyframes spark-explode {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x-offset), var(--y-offset)) scale(0);
+  }
+}
+
+.skull-rise {
+  position: absolute;
+  font-size: 32px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, 0);
+  opacity: 0;
+  color: #8B5CF6;
+  filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.7));
+  animation: skull-float 1.5s ease-in-out forwards;
+}
+
+@keyframes skull-float {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.8);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -20px) scale(1.2);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -40px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -60px) scale(0.8);
+  }
+}
+
+.explosion-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: transparent;
+  border: 2px solid #EF4444;
+  opacity: 0;
+  animation: explosion-ring 1s ease-out forwards;
+}
+
+@keyframes explosion-ring {
+  0% {
+    width: 10px;
+    height: 10px;
+    opacity: 1;
+    border-width: 4px;
+  }
+  100% {
+    width: 100px;
+    height: 100px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.particle.ember {
+  background: radial-gradient(circle, #FF9500, #EF4444);
+  border-radius: 50%;
+  width: 5px;
+  height: 5px;
+  filter: blur(1px);
+  animation: ember-float 1.5s ease-out forwards;
+}
+
+@keyframes ember-float {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(var(--x-offset) * 0.4, var(--y-offset) * 0.4) scale(1.2);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x-offset), var(--y-offset)) scale(0.5);
+  }
+}
+
+.particle.sound-wave {
+  background: transparent;
+  border: 1px solid #3ABEFF;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  left: 50%;
+  top: 50%;
+  opacity: 1;
+  animation: sound-wave-expand 1s ease-out forwards;
+}
+
+@keyframes sound-wave-expand {
+  0% {
+    width: 5px;
+    height: 5px;
+    opacity: 1;
+    border-width: 2px;
+  }
+  100% {
+    width: 120px;
+    height: 120px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+.taunt-shield {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.2), transparent 70%);
+  border-radius: 50%;
+  animation: taunt-pulse 2s infinite;
+}
+
+@keyframes taunt-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.5;
+  }
+}
+
+/* Effect Animations */
+@keyframes lightning-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px #FFB800;
+  }
+  50% {
+    box-shadow: 0 0 16px #FFB800;
+  }
+}
+
+@keyframes skull-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes explosion-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+@keyframes shield-pulse {
+  0%, 100% {
+    box-shadow: 0 0 8px #FCD34D;
+  }
+  50% {
+    box-shadow: 0 0 16px #FCD34D;
+  }
+}
+
+@keyframes sound-wave {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+  }
+}
+
+@keyframes fade-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+} 
