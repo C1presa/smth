@@ -340,13 +340,16 @@ class CardBattleGameUI {
     this.elements.phaseButton.addEventListener('click', () => {
       if (this.game.targetingMode) {
         // Cancel targeting mode
-        this.game.exitTargetingMode();
-        this.board.clearSelection();
-        this.board.clearHighlights();
-        this.update();
-      } else if (this.game.currentPhase === 'warshout_targeting') {
-        this.handleEffectTargetingCancel();
+        this.game.exitTargetingMode(); // Game logic handles phase restoration
+        this.board.clearSelection(); // Clear UI selections
+        this.board.clearHighlights(); // Clear UI highlights
+        // Ensure message overlay is hidden if it was a targeting prompt
+        if (this.elements.gameMessage.textContent.startsWith("Select a target for")) {
+            this.elements.gameMessage.style.display = 'none';
+        }
+        this.update(); // Refresh UI to reflect exited targeting mode
       } else {
+        // Regular phase progression
         this.nextPhase();
       }
     });
@@ -398,46 +401,32 @@ class CardBattleGameUI {
       this.handleGameOver();
     }
     
-    // Update phase button text and state for targeting mode
-    if (this.game.targetingMode) {
-      this.elements.phaseButton.textContent = 'Cancel Targeting';
-      this.elements.phaseButton.disabled = false;
-      
-      // Show targeting message
-      const effectType = this.game.targetingEffect.type;
-      const effectAction = this.game.targetingEffect.action;
-      let message = '';
-      
-      switch (effectType) {
-        case 'strike':
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s Strike effect`;
-          break;
-        case 'deathstrike':
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s DeathStrike effect`;
-          break;
-        default:
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s effect`;
-      }
-      
-      this.showMessage(message);
-    }
+    // Update phase button text and state for targeting mode handled in updatePhaseInfo
   }
   
   // Keep your existing updatePhaseInfo method but improve it
   updatePhaseInfo() {
     let phaseText = '';
-    let turnText = '';
     let buttonEnabled = true;
     let buttonText = 'Next Phase';
     const currentPlayer = this.game.getCurrentPlayer();
     const playerName = currentPlayer.id === 1 ? 'Player 1' : 'Player 2';
-    turnText = `Turn ${this.game.turnNumber}`;
-    if (this.game.pendingActions.length > 0 && 
+    // turnText is part of phaseInfo innerHTML now
+
+    if (this.game.targetingMode) {
+      // Targeting mode takes precedence for UI state
+      phaseText = `${playerName} - Select Target for ${this.game.targetingUnit?.cardName}'s ${this.game.targetingEffect?.type || 'effect'}`;
+      buttonText = 'Cancel Targeting';
+      buttonEnabled = true;
+      this.showMessage(`Select a target for ${this.game.targetingUnit?.cardName}'s ${this.game.targetingEffect?.type || 'effect'}`);
+    } else if (this.game.pendingActions.length > 0 && 
         this.game.pendingActions[0].type === 'placeKriper') {
       phaseText = `${playerName} - Place Your Kriper`;
       buttonEnabled = false;
-      this.game.currentPhase = 'kriper_placement';
+      // Avoid directly mutating game.currentPhase here; game logic should manage its own phase.
+      // The UI should react to game.currentPhase.
     } else {
+      // Regular phase display
       switch (this.game.currentPhase) {
         case PHASES.DRAW:
           phaseText = `${playerName}'s Draw Phase`;
@@ -455,22 +444,23 @@ class CardBattleGameUI {
           phaseText = `${playerName}'s Battle Phase`;
           buttonText = 'End Turn';
           break;
-        case PHASES.END:
+        case PHASES.END: // Should ideally not be a phase the UI waits on, but included for completeness
           phaseText = `${playerName}'s End Phase`;
           buttonText = 'End Turn';
           break;
-        case 'warshout_targeting':
-          phaseText = `${playerName} - Select Effect Target`;
-          buttonText = 'Cancel Target';
-          break;
+        // 'targeting' phase from game logic is handled by this.game.targetingMode check above
         default:
-          if (this.game.isFirstTurn) {
-            phaseText = `${playerName} - Place Starting Units`;
+          // Fallback or initial state text
+          if (this.game.isFirstTurn && !(this.game.pendingActions.length > 0 && this.game.pendingActions[0].type === 'placeKriper')) {
+            // If it's the first turn but no Kriper pending (e.g. after Kriper placed, before first draw)
+            phaseText = `${playerName}'s Turn Starting`; // Or reflect current game phase more directly
           } else {
-            phaseText = `${playerName}'s Turn`;
+            phaseText = `${playerName}'s Turn (${this.capitalizeFirstLetter(this.game.currentPhase)})`;
           }
+          break; // Make sure to break here
       }
     }
+    
     // Use compact design
     this.elements.phaseInfo.innerHTML = `
       <div class="phase-text">${phaseText}</div>

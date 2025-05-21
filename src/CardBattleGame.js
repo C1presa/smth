@@ -50,15 +50,21 @@ class CardBattleGame {
   // Prepare deck by converting card definitions to actual card instances
   prepareDeck(deckDefinition) {
     const deck = [];
-    
+    if (!deckDefinition || !deckDefinition.cards) {
+      console.error("Invalid deckDefinition or missing cards array:", deckDefinition);
+      return deck; // Return empty deck to prevent further errors
+    }
     deckDefinition.cards.forEach(cardEntry => {
-      for (let i = 0; i < cardEntry.count; i++) {
-        const card = { ...cardEntry };
-        delete card.count;
-        deck.push(card);
+      const fullCard = getCardByName(cardEntry.name);
+      if (fullCard) {
+        for (let i = 0; i < cardEntry.count; i++) {
+          // Push a copy of the full card object for each count
+          deck.push({ ...fullCard }); 
+        }
+      } else {
+        console.warn(`Card named "${cardEntry.name}" not found in allCards. Skipping.`);
       }
     });
-    
     return deck;
   }
   
@@ -565,10 +571,8 @@ playCard(cardIndex, row, col) {
         break;
     }
     
-    // If this is the first turn and we've completed a full turn for both players
-    if (this.isFirstTurn && this.currentPlayerIndex === 0 && this.currentPhase === PHASES.DRAW) {
-      this.isFirstTurn = false;
-    }
+    // The isFirstTurn flag is now exclusively managed by the endTurn() method
+    // to avoid redundancy and ensure it's set at the precise end of P2's first turn.
     
     return { success: true, phase: this.currentPhase };
   }
@@ -692,24 +696,38 @@ playCard(cardIndex, row, col) {
                 cardPlayed = true;
                 
                 // Handle targeting if needed
-                if (result.requiresTargeting && result.validTargets.length > 0) {
-                  // AI simply picks the first valid target
-                  const target = result.validTargets[0];
-                  this.executeWarshoutEffect(target);
+                if (result.requiresTargeting && this.targetingMode && this.targetingValidTargets && this.targetingValidTargets.length > 0) {
+                  // AI simply picks the first valid target from the targetingValidTargets list
+                  const targetToSelect = this.targetingValidTargets[0];
+                  // Call handleTargetSelection to resolve the targeting choice
+                  this.handleTargetSelection(targetToSelect);
+                  // Note: cardPlayed remains true. The game state (currentPhase) was 'targeting'.
+                  // handleTargetSelection will call exitTargetingMode and restore the originalPhase (likely PLAY).
                 }
               }
               
-              break;
+              break; // Break from column search once a card attempt (play or failed play) is made for this found card.
             }
           }
         }
-      } while (cardPlayed && ai.hand.some(card => card.cost <= ai.mana));
+        // Loop continues if a card was successfully played and there are still affordable cards.
+        // If targeting occurred, the phase is restored by exitTargetingMode.
+      } while (cardPlayed && ai.hand.some(card => card.cost <= ai.mana) && !this.targetingMode); // Stop if targeting mode is active
       
+      // If AI entered targeting mode and it's still somehow active (e.g. callback didn't run or error), exit it to be safe.
+      if (this.targetingMode) {
+          this.exitTargetingMode();
+      }
+
       // Move to battle phase
       this.nextPhase();
       
       // Battle phase - AI attacks with all units that can attack
-      ai.units.forEach(unit => {
+      const unitsToAttack = [...ai.units]; // Create a copy to iterate over, as unit removal can occur
+
+      unitsToAttack.forEach(unit => {
+        if (!unit || unit.hasAttacked || !ai.units.includes(unit)) return; // Check if unit is still valid and hasn't attacked
+
         const targets = Effects.getPotentialAttackTargets(unit, this);
         
         if (targets.length > 0) {
@@ -719,15 +737,38 @@ playCard(cardIndex, row, col) {
           if (playerHealthTarget) {
             this.attackWithUnit(unit, playerHealthTarget);
           } else {
-            // Otherwise, pick the highest value target
-            // Simple heuristic: lowest health / highest attack = best target
-            const bestTarget = targets.reduce((best, current) => {
-              const bestValue = best.health / best.attack;
-              const currentValue = current.health / current.attack;
+            // Otherwise, pick a unit target using a refined heuristic
+            const unitTargets = targets.filter(t => !t.isPlayerHealth && t.health > 0); // Ensure target is a unit and alive
+            if (unitTargets.length === 0) return; // No valid unit targets
+
+            const bestTarget = unitTargets.reduce((best, current) => {
+              if (!best) return current; // First valid target becomes the initial best
+
+              // Heuristic: prioritize targets that can be killed, then higher attack, then lower health.
+              // This is a more complex heuristic example. The original one is also acceptable if 0 attack is handled.
+              const canKillCurrent = unit.attack >= current.health;
+              const canKillBest = unit.attack >= best.health;
+
+              if (canKillCurrent && !canKillBest) return current;
+              if (!canKillCurrent && canKillBest) return best;
+
+              if (canKillCurrent && canKillBest) { // Both can be killed, prefer higher attack
+                if (current.attack > best.attack) return current;
+                if (best.attack > current.attack) return best;
+              }
+              
+              // If neither can be killed, or if killability and attack are same, use original heuristic (safe division)
+              const currentAttackValue = current.attack === 0 ? 0.001 : current.attack;
+              const bestAttackValue = best.attack === 0 ? 0.001 : best.attack;
+              const currentValue = current.health / currentAttackValue;
+              const bestValue = best.health / bestAttackValue;
+              
               return currentValue < bestValue ? current : best;
-            }, targets[0]);
+            }, null); // Start with null
             
-            this.attackWithUnit(unit, bestTarget);
+            if (bestTarget) { // Ensure a target was selected
+              this.attackWithUnit(unit, bestTarget);
+            }
           }
         }
       });
