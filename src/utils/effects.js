@@ -1,68 +1,205 @@
 import Unit from '../models/Unit.js';
-import { YAR_RANGE } from './constants.js';
+import { YAR_RANGE, ROWS, COLS } from './constants.js';
 
-// Check if a target is valid based on effect requirements
-export const isValidTarget = (effect, sourceUnit, targetUnit, gameState) => {
-  if (!effect.requiresTargeting) {
-    return false;
-  }
-  
-  // Check if target belongs to the right player
-  if (effect.targetType === 'ally' && targetUnit.player !== sourceUnit.player) {
-    return false;
-  }
-  
-  if (effect.targetType === 'enemy' && targetUnit.player === sourceUnit.player) {
-    return false;
-  }
-  
-  // Check YAR restriction
-  if (effect.yar) {
-    const sourcePlayer = gameState.players.find(p => p.id === sourceUnit.player);
-    const spawnRow = sourcePlayer.id === 1 ? 4 : 0;
-    
-    // Check if target is within YAR range (2 rows from spawn)
-    const distance = Math.abs(targetUnit.row - spawnRow);
-    if (distance > YAR_RANGE) {
-      return false;
-    }
-  }
-  
-  // Check type filter
-  if (effect.filter && effect.filter.type) {
-    const targetType = targetUnit.type.toLowerCase();
-    if (!targetType.includes(effect.filter.type.toLowerCase())) {
-      return false;
-    }
-  }
-  
-  // Check min cost filter
-  if (effect.filter && effect.filter.minCost && targetUnit.cost < effect.filter.minCost) {
-    return false;
-  }
-  
-  // Check max cost filter
-  if (effect.filter && effect.filter.maxCost && targetUnit.cost > effect.filter.maxCost) {
-    return false;
-  }
-  
-  return true;
-};
-
-// Get valid targets for an effect
+// Returns a list of valid target units for a given effect and source unit
 export const getValidTargets = (effect, sourceUnit, gameState) => {
   if (!effect.requiresTargeting) {
     return [];
   }
-  
-  const allUnits = [];
-  gameState.players.forEach(player => {
-    player.units.forEach(unit => {
-      allUnits.push(unit);
+  const allUnits = [...gameState.players[0].units, ...gameState.players[1].units];
+  const validTargets = [];
+  for (const targetUnit of allUnits) {
+    // 1. Self-Targeting
+    if (effect.targetType === 'self') {
+      if (targetUnit.id === sourceUnit.id) {
+        validTargets.push(targetUnit);
+      }
+      continue;
+    }
+    // 2. Player Ownership
+  if (effect.targetType === 'ally' && targetUnit.player !== sourceUnit.player) {
+      continue;
+  }
+  if (effect.targetType === 'enemy' && targetUnit.player === sourceUnit.player) {
+      continue;
+  }
+    // 3. YAR (Your Adjacent Row) Restriction
+  if (effect.yar) {
+    const sourcePlayer = gameState.players.find(p => p.id === sourceUnit.player);
+      const spawnRow = sourcePlayer.id === 1 ? ROWS - 1 : 0;
+    const distance = Math.abs(targetUnit.row - spawnRow);
+    if (distance > YAR_RANGE) {
+        continue;
+    }
+  }
+    // 4. Type Filter
+  if (effect.filter && effect.filter.type) {
+      const targetType = targetUnit.type?.toLowerCase() || '';
+    if (!targetType.includes(effect.filter.type.toLowerCase())) {
+        continue;
+    }
+  }
+    // 5. Min Cost Filter
+  if (effect.filter && effect.filter.minCost && targetUnit.cost < effect.filter.minCost) {
+      continue;
+  }
+    // 6. Max Cost Filter
+  if (effect.filter && effect.filter.maxCost && targetUnit.cost > effect.filter.maxCost) {
+      continue;
+    }
+    // 7. Area-based targeting
+    if (effect.area && effect.area !== 'all') {
+      if (effect.area === 'adjacent') {
+        const rowDiff = Math.abs(sourceUnit.row - targetUnit.row);
+        const colDiff = Math.abs(sourceUnit.col - targetUnit.col);
+        if (!((rowDiff <= 1 && colDiff <= 1) && !(rowDiff === 0 && colDiff === 0))) {
+          continue;
+        }
+      }
+      // Add other area logic as needed
+    }
+    validTargets.push(targetUnit);
+  }
+  return validTargets;
+};
+
+// Central effect execution dispatcher
+export const executeEffect = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!effect || !effect.type) {
+    console.warn('Attempted to execute an invalid effect.', effect);
+    return { success: false, reason: 'Invalid effect' };
+  }
+  let result = { success: false, reason: 'Effect type not handled' };
+  switch (effect.type) {
+    case 'warshout':
+      result = handleWarshout(effect, sourceUnit, targetUnit, gameState);
+      break;
+    case 'deathblow':
+      result = handleDeathblow(effect, sourceUnit, targetUnit, gameState);
+      break;
+    case 'deathstrike':
+      result = handleDeathStrike(effect, sourceUnit, targetUnit, gameState);
+      break;
+    case 'strike':
+      result = handleStrike(effect, sourceUnit, targetUnit, gameState);
+      break;
+    case 'sacrifice':
+      result = handleSacrifice(effect, sourceUnit, targetUnit, gameState);
+      break;
+    default:
+      console.warn('Unknown effect type during execution:', effect.type);
+  }
+  return result;
+};
+
+// Individual effect handlers
+export const handleWarshout = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!targetUnit) {
+    return { success: false, reason: 'No target for Warshout' };
+  }
+  if (effect.action === 'buff' && effect.value) {
+    const duration = effect.duration || 1;
+    targetUnit.addBuff({
+      attack: effect.value.attack || 0,
+      health: effect.value.health || 0,
+      duration: duration
     });
-  });
-  
-  return allUnits.filter(unit => isValidTarget(effect, sourceUnit, unit, gameState));
+    if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+      gameState.gameLog.addLog(`${sourceUnit.cardName} uses Warshout on ${targetUnit.cardName}, giving them +${effect.value.attack} attack and +${effect.value.health} health.`);
+    }
+    return { success: true };
+  }
+  return { success: false, reason: 'Invalid Warshout action' };
+};
+
+export const handleDeathblow = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!targetUnit) {
+    return { success: false, reason: 'No target for Deathblow' };
+  }
+  if (effect.action === 'damage' && effect.value) {
+    const didDie = targetUnit.takeDamage(effect.value);
+    if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+      gameState.gameLog.addLog(`${sourceUnit.cardName}'s Deathblow deals ${effect.value} damage to ${targetUnit.cardName}.`);
+    }
+    if (didDie && typeof gameState.removeUnit === 'function') {
+      gameState.removeUnit(targetUnit);
+      if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+        gameState.gameLog.addLog(`${targetUnit.cardName} was defeated by ${sourceUnit.cardName}'s Deathblow.`);
+      }
+    }
+    return { success: true };
+  }
+  return { success: false, reason: 'Invalid Deathblow action' };
+};
+
+export const handleDeathStrike = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!targetUnit) {
+    return { success: false, reason: 'No target for Deathstrike' };
+  }
+  if (effect.action === 'damage' && effect.value) {
+    const didDie = targetUnit.takeDamage(effect.value);
+    if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+      gameState.gameLog.addLog(`${sourceUnit.cardName}'s Deathstrike deals ${effect.value} damage to ${targetUnit.cardName}.`);
+    }
+    if (didDie && typeof gameState.removeUnit === 'function') {
+      gameState.removeUnit(targetUnit);
+      if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+        gameState.gameLog.addLog(`${targetUnit.cardName} was defeated by ${sourceUnit.cardName}'s Deathstrike.`);
+      }
+    }
+    return { success: true };
+  }
+  return { success: false, reason: 'Invalid Deathstrike action' };
+};
+
+export const handleStrike = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!targetUnit) {
+    return { success: false, reason: 'No target for Strike' };
+  }
+  if (effect.action === 'damage' && effect.value) {
+    const didDie = targetUnit.takeDamage(effect.value);
+    if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+      gameState.gameLog.addLog(`${sourceUnit.cardName}'s Strike deals ${effect.value} damage to ${targetUnit.cardName}.`);
+    }
+    if (didDie && typeof gameState.removeUnit === 'function') {
+      gameState.removeUnit(targetUnit);
+      if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+        gameState.gameLog.addLog(`${targetUnit.cardName} was defeated by ${sourceUnit.cardName}'s Strike.`);
+      }
+    }
+    return { success: true };
+  }
+  return { success: false, reason: 'Invalid Strike action' };
+};
+
+export const handleSacrifice = (effect, sourceUnit, targetUnit, gameState) => {
+  if (!sourceUnit) {
+    return { success: false, reason: 'No source unit for Sacrifice' };
+  }
+  if (effect.action === 'damage_self_for_buff' && effect.value && targetUnit) {
+    const selfDied = sourceUnit.takeDamage(effect.value.selfDamage);
+    if (selfDied && typeof gameState.removeUnit === 'function') {
+      gameState.removeUnit(sourceUnit);
+      if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+        gameState.gameLog.addLog(`${sourceUnit.cardName} sacrifices itself.`);
+      }
+    } else if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+      gameState.gameLog.addLog(`${sourceUnit.cardName} takes ${effect.value.selfDamage} damage to sacrifice.`);
+    }
+    if (effect.value.buff) {
+      const duration = effect.duration || 1;
+      targetUnit.addBuff({
+        attack: effect.value.buff.attack || 0,
+        health: effect.value.buff.health || 0,
+        duration: duration
+      });
+      if (gameState.gameLog && typeof gameState.gameLog.addLog === 'function') {
+        gameState.gameLog.addLog(`${sourceUnit.cardName}'s sacrifice buffs ${targetUnit.cardName} with +${effect.value.buff.attack} attack and +${effect.value.buff.health} health.`);
+      }
+    }
+    return { success: true };
+  }
+  return { success: false, reason: 'Invalid Sacrifice action' };
 };
 
 // Apply a damage effect
@@ -160,10 +297,10 @@ export const applySummonEffect = (effect, sourceUnit, gameState) => {
     attack: summonValue.attack,
     health: summonValue.health,
     type: summonValue.type,
-    cost: 1,
-    effects: [],
-    description: 'Summoned unit',
-    color: sourceUnit.color,
+    cost: 1, // Default cost for summoned units, can be overridden if specified in summonValue
+    effects: summonValue.effects || [], // Pass effects from definition
+    description: summonValue.description || 'Summoned unit',
+    color: sourceUnit.color, // Inherit color from summoner for consistency
     unitColor: sourceUnit.unitColor,
     highlightColor: sourceUnit.highlightColor,
     icon: sourceUnit.icon
@@ -228,160 +365,6 @@ export const applyDrawSpecificEffect = (effect, sourceUnit, gameState) => {
   const result = player.drawSpecificCard(effect.filter || {});
   
   return result ? [result] : [];
-};
-
-// Apply a sacrifice effect
-export const applySacrificeEffect = (effect, target, gameState) => {
-  const player = gameState.players.find(p => p.id === target.player);
-  const died = target.takeDamage(target.health); // Ensure the unit dies
-  
-  if (died) {
-    player.removeUnit(target);
-    
-    // Don't trigger deathstrike for sacrificed units
-    // Instead, handle bonus effects from the sacrifice
-    if (effect.bonusOnKill) {
-      const bonusResults = [];
-      
-      if (effect.bonusOnKill.draw) {
-        const drawEffect = { value: effect.bonusOnKill.draw };
-        const drawResults = applyDrawEffect(drawEffect, target, gameState);
-        bonusResults.push(...drawResults);
-      }
-      
-      return { target, died: true, bonusResults };
-    }
-  }
-  
-  return { target, died };
-};
-
-// Execute a warshout effect
-export const executeWarshoutEffect = (effect, sourceUnit, targetUnit, gameState) => {
-  // Log player units for debugging
-  console.log('Executing warshout effect:', {
-    effect,
-    sourceUnit: sourceUnit ? {
-      id: sourceUnit.id,
-      name: sourceUnit.cardName,
-      player: sourceUnit.player,
-      row: sourceUnit.row,
-      col: sourceUnit.col
-    } : null,
-    targetUnit: targetUnit ? {
-      id: targetUnit.id,
-      name: targetUnit.cardName,
-      player: targetUnit.player,
-      row: targetUnit.row,
-      col: targetUnit.col
-    } : null
-  });
-
-  // If effect doesn't require targeting but has a target type and area
-  if (!effect.requiresTargeting && effect.targetType && effect.area === 'all') {
-    // Get all valid units matching the target type
-    const targets = [];
-    gameState.players.forEach(player => {
-      if ((effect.targetType === 'ally' && player.id === sourceUnit.player) ||
-          (effect.targetType === 'enemy' && player.id !== sourceUnit.player) ||
-          effect.targetType === 'any') {
-        
-        player.units.forEach(unit => {
-          // Skip null units
-          if (!unit) {
-            console.warn('Null unit found in player.units:', player.id);
-            return;
-          }
-
-          // Apply additional filters if present
-          if (effect.filter) {
-            if (effect.filter.type && !unit.type.toLowerCase().includes(effect.filter.type.toLowerCase())) {
-              return;
-            }
-            if (effect.filter.minCost && unit.cost < effect.filter.minCost) {
-              return;
-            }
-            if (effect.filter.maxCost && unit.cost > effect.filter.maxCost) {
-              return;
-            }
-          }
-          
-          targets.push(unit);
-        });
-      }
-    });
-    
-    // Log targets for debugging
-    console.log('Effect targets:', targets.map(t => ({
-      id: t.id,
-      name: t.cardName,
-      player: t.player,
-      row: t.row,
-      col: t.col
-    })));
-    
-    // If no valid targets found, return early with a success message
-    if (targets.length === 0) {
-      console.log('No valid targets found for effect, returning early');
-      return { success: true, message: 'No valid targets found for effect' };
-    }
-    
-    // Apply the effect to all targets
-    switch (effect.action) {
-      case 'damage': {
-        const result = applyDamageEffect(effect, targets, gameState);
-        if (!result.success) {
-          console.warn('Damage effect failed:', result.reason);
-          return result;
-        }
-        return { success: true, results: result.results };
-      }
-      case 'heal':
-        return { success: true, results: applyHealEffect(effect, targets) };
-      case 'buff':
-        return { success: true, results: applyBuffEffect(effect, targets) };
-      default:
-        console.warn('Unknown action type:', effect.action);
-        return { success: false, reason: 'Unknown action type' };
-    }
-  }
-  
-  // If effect requires targeting but no target provided
-  if (effect.requiresTargeting && !targetUnit) {
-    console.warn('Effect requires targeting but no target provided');
-    return { success: false, reason: 'Effect requires targeting' };
-  }
-  
-  // Execute the effect based on action type
-  switch (effect.action) {
-    case 'damage': {
-      if (!targetUnit) {
-        console.warn('Damage effect requires a target unit');
-        return { success: false, reason: 'No target unit provided' };
-      }
-      const result = applyDamageEffect(effect, [targetUnit], gameState);
-      if (!result.success) {
-        console.warn('Damage effect failed:', result.reason);
-        return result;
-      }
-      return { success: true, results: result.results };
-    }
-    case 'heal':
-      return { success: true, results: applyHealEffect(effect, [targetUnit]) };
-    case 'buff':
-      return { success: true, results: applyBuffEffect(effect, [targetUnit]) };
-    case 'sacrifice':
-      return { success: true, result: applySacrificeEffect(effect, targetUnit, gameState) };
-    case 'summon':
-      return { success: true, result: applySummonEffect(effect, sourceUnit, gameState) };
-    case 'draw':
-      return { success: true, results: applyDrawEffect(effect, sourceUnit, gameState) };
-    case 'drawSpecific':
-      return { success: true, results: applyDrawSpecificEffect(effect, sourceUnit, gameState) };
-    default:
-      console.warn('Unknown action type:', effect.action);
-      return { success: false, reason: 'Unknown action type' };
-  }
 };
 
 // Execute deathblow effects
@@ -670,177 +653,25 @@ function getValidTargetsForEffect(effect, sourceUnit, gameState) {
   return targets;
 }
 
-// Handle Strike effect
-export function handleStrike(unit, effect, gameState, selectedTarget = null) {
-  if (!effect) return;
-  
-  // Get valid targets for the effect
-  const validTargets = getValidTargetsForEffect(effect, unit, gameState);
-  
-  // If effect requires targeting and there are valid targets
-  if (effect.requiresTargeting && validTargets.length > 0 && !selectedTarget) {
-    // Enter targeting mode
-    gameState.enterTargetingMode(
-      unit,
-      effect,
-      validTargets,
-      gameState.getCurrentPlayer(),
-      (target) => {
-        // Apply initial effect
-        if (effect.action !== 'none') {
-          switch (effect.action) {
-            case 'damage':
-              target.takeDamage(effect.value || 1);
-              break;
-            case 'heal':
-              target.heal(effect.value || 1);
-              break;
-          }
-        }
-        
-        // Apply followup effect
-        if (effect.followup && effect.followup.action !== 'none') {
-          switch (effect.followup.action) {
-            case 'buff':
-              if (effect.followup.value) {
-                const duration = effect.followup.duration === 'permanent' ? 'permanent' : 1;
-                target.addBuff({
-                  attack: effect.followup.value.attack || 0,
-                  health: effect.followup.value.health || 0,
-                  duration: duration
-                });
-              }
-              break;
-          }
-        }
-      }
-    );
-    return { requiresTargeting: true, validTargets };
-  }
-  
-  // If we have a selected target or no targeting required, apply effect
-  const target = selectedTarget || unit;
-  
-  // Apply initial effect
-  if (effect.action !== 'none') {
-    switch (effect.action) {
-      case 'damage':
-        target.takeDamage(effect.value || 1);
-        break;
-      case 'heal':
-        target.heal(effect.value || 1);
-        break;
-    }
-  }
-  
-  // Apply followup effect
-  if (effect.followup && effect.followup.action !== 'none') {
-    switch (effect.followup.action) {
-      case 'buff':
-        if (effect.followup.value) {
-          const duration = effect.followup.duration === 'permanent' ? 'permanent' : 1;
-          target.addBuff({
-            attack: effect.followup.value.attack || 0,
-            health: effect.followup.value.health || 0,
-            duration: duration
-          });
-        }
-        break;
-    }
-  }
-  
-  return { success: true };
-}
-
-// Handle DeathStrike effect
-export function handleDeathStrike(unit, effect, gameState, selectedTarget = null) {
-  if (!effect) return;
-  
-  // Get valid targets for the effect
-  const validTargets = getValidTargetsForEffect(effect, unit, gameState);
-  
-  // If effect requires targeting and there are valid targets
-  if (effect.requiresTargeting && validTargets.length > 0 && !selectedTarget) {
-    // Enter targeting mode
-    gameState.enterTargetingMode(
-      unit,
-      effect,
-      validTargets,
-      gameState.getCurrentPlayer(),
-      (target) => {
-        // Apply the effect to the selected target
-        if (effect.action !== 'none') {
-          switch (effect.action) {
-            case 'damage':
-              target.takeDamage(effect.value || 1);
-              break;
-            case 'heal':
-              target.heal(effect.value || 1);
-              break;
-            case 'buff':
-              if (effect.value) {
-                const duration = effect.duration === 'permanent' ? 'permanent' : 1;
-                target.addBuff({
-                  attack: effect.value.attack || 0,
-                  health: effect.value.health || 0,
-                  duration: duration
-                });
-              }
-              break;
-          }
-        }
-      }
-    );
-    return { requiresTargeting: true, validTargets };
-  }
-  
-  // If we have a selected target or no targeting required, apply effect
-  const target = selectedTarget || unit;
-  
-  // Apply the effect
-  if (effect.action !== 'none') {
-    switch (effect.action) {
-      case 'damage':
-        target.takeDamage(effect.value || 1);
-        break;
-      case 'heal':
-        target.heal(effect.value || 1);
-        break;
-      case 'buff':
-        if (effect.value) {
-          const duration = effect.duration === 'permanent' ? 'permanent' : 1;
-          target.addBuff({
-            attack: effect.value.attack || 0,
-            health: effect.value.health || 0,
-            duration: duration
-          });
-        }
-        break;
-    }
-  }
-  
-  return { success: true };
-}
-
 // Update the applyEffect function to handle new effects
 function applyEffect(unit, effect, gameState) {
     if (!effect || !effect.type) return;
     
     switch (effect.type) {
         case 'warshout':
-            handleWarshout(unit, effect, gameState);
+            handleWarshout(effect, unit, null, gameState);
             break;
             
         case 'deathblow':
-            handleDeathblow(unit, effect, gameState);
+            handleDeathblow(effect, unit, null, gameState);
             break;
             
         case 'deathstrike':
-            handleDeathStrike(unit, effect, gameState);
+            handleDeathStrike(effect, unit, null, gameState);
             break;
             
         case 'strike':
-            handleStrike(unit, effect, gameState);
+            handleStrike(effect, unit, null, gameState);
             break;
             
         case 'taunt':

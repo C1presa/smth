@@ -178,12 +178,15 @@ const allCards = [
       {
         type: 'warshout',
         requiresTargeting: false,
-        targetType: 'ally',
-        filter: {},
-        action: 'buff',
-        value: { health: 3, attack: 1, health: 1 },
-        area: 'all',
-        yar: true
+        targetType: 'ally', // Target friendly units
+        filter: {}, // No specific unit type filter
+        action: 'compound', // New action type for multiple effects
+        yar: true, // YAR restriction applies
+        subEffects: [
+          { action: 'heal', value: 3 },
+          { action: 'buff', value: { attack: 1, health: 1 } }
+        ],
+        area: 'all'
       }
     ]
   }),

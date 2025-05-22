@@ -340,13 +340,16 @@ class CardBattleGameUI {
     this.elements.phaseButton.addEventListener('click', () => {
       if (this.game.targetingMode) {
         // Cancel targeting mode
-        this.game.exitTargetingMode();
-        this.board.clearSelection();
-        this.board.clearHighlights();
-        this.update();
-      } else if (this.game.currentPhase === 'warshout_targeting') {
-        this.handleEffectTargetingCancel();
+        this.game.exitTargetingMode(); // Game logic handles phase restoration
+        this.board.clearSelection(); // Clear UI selections
+        this.board.clearHighlights(); // Clear UI highlights
+        // Ensure message overlay is hidden if it was a targeting prompt
+        if (this.elements.gameMessage.textContent.startsWith("Select a target for")) {
+            this.elements.gameMessage.style.display = 'none';
+        }
+        this.update(); // Refresh UI to reflect exited targeting mode
       } else {
+        // Regular phase progression
         this.nextPhase();
       }
     });
@@ -371,6 +374,17 @@ class CardBattleGameUI {
   
   // Keep your existing update method
   update() {
+    this.board.clearHighlights();
+    this.board.clearValidTargets();
+    this.elements.gameMessage.textContent = '';
+    if (
+      this.game.targetingMode.active &&
+      this.game.targetingMode.sourceUnit &&
+      this.game.targetingMode.effect
+    ) {
+      this.board.highlightValidTargets(this.game.targetingMode.validTargets);
+      this.showMessage(this.game.targetingMode.message);
+    }
     // Update phase info
     this.updatePhaseInfo();
     
@@ -398,107 +412,71 @@ class CardBattleGameUI {
       this.handleGameOver();
     }
     
-    // Update phase button text and state for targeting mode
-    if (this.game.targetingMode) {
-      this.elements.phaseButton.textContent = 'Cancel Targeting';
-      this.elements.phaseButton.disabled = false;
-      
-      // Show targeting message
-      const effectType = this.game.targetingEffect.type;
-      const effectAction = this.game.targetingEffect.action;
-      let message = '';
-      
-      switch (effectType) {
-        case 'strike':
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s Strike effect`;
-          break;
-        case 'deathstrike':
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s DeathStrike effect`;
-          break;
-        default:
-          message = `Select a target for ${this.game.targetingUnit.cardName}'s effect`;
-      }
-      
-      this.showMessage(message);
+    // Update phase button text and state for targeting mode handled in updatePhaseInfo
+
+    // Update UI based on targeting mode
+    if (this.game.targetingMode.active) {
+      this.showTargetingUI();
+    } else {
+      this.hideTargetingUI();
     }
   }
   
   // Keep your existing updatePhaseInfo method but improve it
   updatePhaseInfo() {
     let phaseText = '';
-    let turnText = '';
     let buttonEnabled = true;
     let buttonText = 'Next Phase';
     const currentPlayer = this.game.getCurrentPlayer();
     const playerName = currentPlayer.id === 1 ? 'Player 1' : 'Player 2';
-    turnText = `Turn ${this.game.turnNumber}`;
-    if (this.game.pendingActions.length > 0 && 
-        this.game.pendingActions[0].type === 'placeKriper') {
+
+    if (this.game.targetingMode && this.game.targetingMode.active) {
+      phaseText = `${playerName} - Select Target for ${this.game.targetingMode.sourceUnit.cardName}'s ${this.game.targetingMode.effect.type} effect`;
+      buttonText = 'Cancel Targeting';
+      buttonEnabled = true;
+    } else if (this.game.pendingActions.length > 0 && this.game.pendingActions[0].type === 'placeKriper') {
       phaseText = `${playerName} - Place Your Kriper`;
       buttonEnabled = false;
-      this.game.currentPhase = 'kriper_placement';
     } else {
       switch (this.game.currentPhase) {
         case PHASES.DRAW:
           phaseText = `${playerName}'s Draw Phase`;
           buttonText = 'Draw Card';
+          buttonEnabled = true;
           break;
         case PHASES.ADVANCE:
           phaseText = `${playerName}'s Advance Phase`;
           buttonText = 'Advance Units';
+          buttonEnabled = true;
           break;
         case PHASES.PLAY:
           phaseText = `${playerName}'s Play Phase`;
           buttonText = 'To Battle Phase';
+          buttonEnabled = true;
           break;
         case PHASES.BATTLE:
           phaseText = `${playerName}'s Battle Phase`;
           buttonText = 'End Turn';
+          buttonEnabled = true;
           break;
         case PHASES.END:
           phaseText = `${playerName}'s End Phase`;
           buttonText = 'End Turn';
-          break;
-        case 'warshout_targeting':
-          phaseText = `${playerName} - Select Effect Target`;
-          buttonText = 'Cancel Target';
+          buttonEnabled = true;
           break;
         default:
-          if (this.game.isFirstTurn) {
-            phaseText = `${playerName} - Place Starting Units`;
-          } else {
-            phaseText = `${playerName}'s Turn`;
-          }
+          phaseText = `${playerName}'s Turn (${this.capitalizeFirstLetter(this.game.currentPhase)})`;
+          buttonEnabled = true;
+          break;
       }
     }
-    // Use compact design
+
     this.elements.phaseInfo.innerHTML = `
       <div class="phase-text">${phaseText}</div>
       <div class="turn-text">Turn ${this.game.turnNumber}</div>
     `;
     this.elements.phaseButton.textContent = buttonText;
-    if (buttonText === 'End Turn') {
-      this.elements.phaseButton.style.backgroundColor = '#22c55e';
-    } else if (buttonText === 'Cancel Target') {
-      this.elements.phaseButton.style.backgroundColor = '#ef4444';
-    } else {
-      this.elements.phaseButton.style.backgroundColor = '#3b82f6';
-    }
     this.elements.phaseButton.disabled = !buttonEnabled;
-    if (this.elements.phaseButton.disabled) {
-      this.elements.phaseButton.style.opacity = '0.5';
-      this.elements.phaseButton.style.cursor = 'not-allowed';
-    } else {
-      this.elements.phaseButton.style.opacity = '1';
-      this.elements.phaseButton.style.cursor = 'pointer';
-    }
-    if (currentPlayer.id === 1) {
-      this.elements.player1Stats.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.7)';
-      this.elements.player2Stats.style.boxShadow = '';
-    } else {
-      this.elements.player2Stats.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.7)';
-      this.elements.player1Stats.style.boxShadow = '';
-    }
   }
   
   // Keep the rest of your existing methods
@@ -542,47 +520,23 @@ class CardBattleGameUI {
         return;
       }
       
-      // --- Strictly only auto-advance after DRAW and ADVANCE ---
+      // Only auto-advance from DRAW -> ADVANCE
       if (currentPhase === PHASES.DRAW && this.game.currentPhase === PHASES.ADVANCE) {
-        console.log('[Auto-advance] DRAW -> ADVANCE');
         setTimeout(() => {
           this.showMessage("Advancing units...");
           this.nextPhase(); // Move to PLAY
         }, 1000);
-      } else if (currentPhase === PHASES.ADVANCE && this.game.currentPhase === PHASES.ADVANCE) {
-        // Defensive: only auto-advance if phase is still ADVANCE (should not happen, but prevents skipping PLAY)
+        return;
+      }
+      // Only auto-advance from ADVANCE -> PLAY
+      if (currentPhase === PHASES.ADVANCE && this.game.currentPhase === PHASES.PLAY) {
         setTimeout(() => {
-          this.showMessage("Advancing units...");
-          this.nextPhase();
-        }, 1000);
+          this.showMessage("Play phase started.");
+          this.update();
+        }, 500);
+        return;
       }
-      // --- Always auto-advance if phase is DRAW after a turn switch ---
-      if (this.game.currentPhase === PHASES.DRAW && currentPhase === PHASES.BATTLE) {
-        console.log('[Auto-advance] New turn DRAW phase');
-        setTimeout(() => {
-          this.showMessage("Drawing card...");
-          this.nextPhase();
-        }, 1000);
-      }
-      // --- Do NOT auto-advance after PLAY or BATTLE ---
-      // PLAY: User must click to proceed to BATTLE
-      // BATTLE: User must click to end turn and switch players
-      // When switching to next player, DRAW phase will auto-advance as above
-      
-      // Check if we just entered the battle phase
-      if (currentPhase !== PHASES.BATTLE && this.game.currentPhase === PHASES.BATTLE) {
-        // Check if there are any units that can attack
-        const currentPlayer = this.game.getCurrentPlayer();
-        const hasAttackableUnits = currentPlayer.units.some(unit => unit.canAttack());
-        
-        if (!hasAttackableUnits) {
-          setTimeout(() => {
-            this.showMessage("No units can attack. Ending turn...");
-            this.nextPhase(); // This will end the turn
-          }, 1000);
-        }
-      }
-      
+      // Do NOT auto-advance after PLAY or BATTLE. User must click to proceed.
       // If it's AI's turn, process it
       if (this.game.isAIOpponent && this.game.currentPlayerIndex === 1) {
         setTimeout(() => {
@@ -731,36 +685,30 @@ class CardBattleGameUI {
   
   // Improved message display
   showMessage(message) {
-    // Show message overlay with enhanced styling
-    this.elements.gameMessage.textContent = message;
-    this.elements.gameMessage.style.display = 'block';
-    this.elements.gameMessage.style.animation = 'fadeIn 0.3s ease-out';
+    const messageElement = document.createElement('div');
+    messageElement.className = 'game-message';
+    messageElement.textContent = message;
     
-    // Add CSS animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translate(-50%, -60%); }
-        to { opacity: 1; transform: translate(-50%, -50%); }
-      }
-      @keyframes fadeOut {
-        from { opacity: 1; transform: translate(-50%, -50%); }
-        to { opacity: 0; transform: translate(-50%, -40%); }
-      }
-    `;
-    document.head.appendChild(style);
+    // Add targeting-specific styling if in targeting mode
+    if (this.game.targetingMode.active) {
+      messageElement.classList.add('targeting-message');
+    }
     
-    // Auto hide after 3 seconds with fade out
+    this.elements.gameMessage.appendChild(messageElement);
+    
+    // Auto-remove after 3 seconds
     setTimeout(() => {
-      this.elements.gameMessage.style.animation = 'fadeOut 0.3s ease-in forwards';
-      setTimeout(() => {
-        this.elements.gameMessage.style.display = 'none';
-      }, 300);
+      messageElement.remove();
     }, 3000);
   }
 
   // Add new event handling methods
   handleTileClick(row, col) {
+    // If in targeting mode, don't handle tile clicks
+    if (this.game.targetingMode.active) {
+      return;
+    }
+
     console.log(`Tile clicked at row ${row}, col ${col}`);
     
     // Priority: Handle Kriper placement if needed
@@ -1114,138 +1062,27 @@ class CardBattleGameUI {
   }
 
   handleUnitClick(unit) {
-    console.log('[UI] Unit clicked:', unit);
-    if (!unit || typeof unit !== 'object' || !('cardName' in unit)) {
-      console.warn('[UI] handleUnitClick: Invalid unit object:', unit);
-      this.showMessage('No valid target selected.');
-      return;
-    }
-    console.log(`[UI] Unit clicked: ${unit.cardName}`);
-    // For targeting mode
-    if (this.game.targetingMode) {
-      const result = this.game.handleTargetSelection(unit);
-      console.log('[UI] Targeting mode result:', result);
-      if (result.success) {
-        // Show success message
-        const effectType = this.game.targetingEffect.type;
-        const effectAction = this.game.targetingEffect.action;
-        let message = '';
-        
-        switch (effectType) {
-          case 'strike':
-            message = `${this.game.targetingUnit.cardName}'s Strike effect targets ${unit.cardName}`;
-            if (effectAction === 'heal') {
-              message += ` and heals for ${this.game.targetingEffect.value || 1}`;
-            } else if (effectAction === 'buff') {
-              message += ` and grants a buff`;
-            }
-            break;
-          case 'deathstrike':
-            message = `${this.game.targetingUnit.cardName}'s DeathStrike effect targets ${unit.cardName}`;
-            if (effectAction === 'heal') {
-              message += ` and heals for ${this.game.targetingEffect.value || 1}`;
-            } else if (effectAction === 'buff') {
-              message += ` and grants a buff`;
-            }
-            break;
-          default:
-            message = `${this.game.targetingUnit.cardName}'s effect targets ${unit.cardName}`;
-        }
-        
-        this.gameLog.addEntry(message, this.game.targetingUnit.player);
-        
-        // Clear targeting state and update UI
-        this.board.clearSelection();
-        this.board.clearHighlights();
-        this.update();
-      } else {
-        this.showMessage(result.reason);
+    if (!unit) return;
+
+    // If in targeting mode, handle target selection
+    if (this.game.targetingMode.active) {
+      if (this.game.targetingMode.validTargets.some(t => t.id === unit.id)) {
+        this.game.targetingMode.resolveCallback(unit);
+        this.showMessage(this.game.targetingMode.message);
       }
       return;
     }
-    
-    // For battle phase
-    if (this.game.currentPhase === PHASES.BATTLE) {
-      const currentPlayer = this.game.getCurrentPlayer();
-      console.log('[DEBUG] unit.player:', unit.player, 'currentPlayer.id:', currentPlayer.id, 'unit.canAttack():', unit.canAttack());
-      // If selecting a unit to attack with
-      if (unit.player === currentPlayer.id && unit.canAttack()) {
-        console.log('[UI] Selecting unit to attack with:', unit);
-        if (this.board.selectedUnit === unit) {
-          // Deselect if already selected
-          console.log('[UI] Deselecting unit');
-          this.board.clearSelection();
-          this.board.clearHighlights();
-        } else {
-          // Select unit and show valid targets
-          console.log('[UI] Calling selectUnit and showValidAttackTargets');
-          this.board.selectUnit(unit);
-          this.board.showValidAttackTargets(unit);
-          this.showMessage(`Select a target for ${unit.cardName} to attack`);
-        }
-        return;
-      }
-      
-      // If a unit is selected and we're clicking on an enemy unit to attack
-      if (this.board.selectedUnit && unit.player !== currentPlayer.id) {
-        const selectedUnit = this.board.selectedUnit;
-        console.log('[UI] Attempting attack:', selectedUnit, '->', unit);
-        const result = this.game.attackWithUnit(selectedUnit, unit);
-        console.log('[UI] Attack result:', result);
-        
-        if (result.success) {
-          if (result.requiresTargeting) {
-            // Show targeting message
-            const effectType = result.effect?.type;
-            let message = '';
-            // Make sure we have a valid effect
-            if (result.effect) {
-              switch (effectType) {
-                case 'strike':
-                  message = `Select a target for ${selectedUnit.cardName}'s Strike effect`;
-                  break;
-                case 'deathstrike':
-                  message = `Select a target for ${selectedUnit.cardName}'s DeathStrike effect`;
-                  break;
-                default:
-                  message = `Select a target for ${selectedUnit.cardName}'s effect`;
-              }
-              this.showMessage(message);
-              // Verify validTargets is an array before passing it
-              if (Array.isArray(result.validTargets) && result.validTargets.length > 0) {
-                this.board.showValidTargets(selectedUnit, result.validTargets);
-              } else {
-                console.warn('No valid targets for effect targeting', result);
-                this.showMessage('No valid targets available');
-              }
-            } else {
-              console.warn('Missing effect in attack result', result);
-              this.showMessage('Error with effect targeting');
-            }
-          } else {
-            // Create attack animation
-            this.animateAttack(selectedUnit, unit);
-            
-            // Log the attack
-            this.gameLog.addEntry(`${selectedUnit.cardName} attacks ${unit.cardName}`, currentPlayer.id);
-            
-            if (result.targetDied) {
-              this.gameLog.addEntry(`${unit.cardName} was destroyed!`, currentPlayer.id);
-            }
-            
-            this.board.clearSelection();
-            this.board.clearHighlights();
-            this.update();
-            
-            // Check for game over
-            if (this.game.isGameOver) {
-              this.handleGameOver();
-            }
-          }
-        } else {
-          this.showMessage(result.reason);
-        }
-      }
+
+    // Regular unit click handling
+    const currentPlayerIndex = this.game.currentPlayerIndex;
+    const isCurrentPlayerUnit = unit.player === currentPlayerIndex + 1;
+
+    if (this.game.currentPhase === PHASES.BATTLE && isCurrentPlayerUnit && !unit.hasAttacked) {
+      this.selectedUnit = unit;
+      this.showValidAttackTargets(unit);
+      this.showMessage(`Selected ${unit.cardName} to attack.`);
+    } else if (this.game.currentPhase === PHASES.BATTLE && !isCurrentPlayerUnit && this.selectedUnit) {
+      this.attackUnit(unit);
     }
   }
 
@@ -1308,27 +1145,34 @@ class CardBattleGameUI {
     }, 300);
   }
 
-  // Add a method to handle effect targeting cancellation
-  handleEffectTargetingCancel() {
-    if (this.game.currentPhase === 'warshout_targeting') {
-      // Clear targeting state
-      this.game.currentPhase = this.game.originalPhase;
-      this.game.selectedUnit = null;
-      this.game.selectedEffect = null;
-      this.game.validTargets = [];
-      
-      // Clear any visual indicators
-      this.board.clearSelection();
-      this.board.clearValidTargets();
-      
-      this.update();
-    }
-  }
-
   // Add helper method for capitalizing first letter
   capitalizeFirstLetter(string) {
     if (!string) return '';
     return string.charAt(0).toUpperCase() + string.slice(1);
+  }
+
+  showTargetingUI() {
+    // Highlight valid targets
+    this.game.targetingMode.validTargets.forEach(target => {
+      const tile = this.board.tiles[target.row][target.col];
+      if (tile) {
+        tile.classList.add('valid-target');
+        tile.style.backgroundColor = 'rgba(147, 51, 234, 0.15)';
+        tile.style.boxShadow = 'inset 0 0 0 2px rgba(147, 51, 234, 0.5)';
+      }
+    });
+
+    // Show targeting message
+    this.showMessage(this.game.targetingMode.message);
+  }
+
+  hideTargetingUI() {
+    // Clear targeting highlights
+    document.querySelectorAll('.valid-target').forEach(tile => {
+      tile.classList.remove('valid-target');
+      tile.style.backgroundColor = '';
+      tile.style.boxShadow = '';
+    });
   }
 }
 

@@ -39,26 +39,35 @@ class CardBattleGame {
     this.selectedEffect = null;
     this.validTargets = [];
     this.originalPhase = PHASES.DRAW;
-    this.targetingMode = false; // New: global targeting mode
-    this.targetingUnit = null;  // The unit that is choosing
-    this.targetingEffect = null; // The effect being resolved
-    this.targetingPlayer = null; // The player who must choose
-    this.targetingValidTargets = []; // Valid targets for the effect
-    this.targetingCallback = null; // Callback to resolve after targeting
+    this.targetingMode = {
+      active: false,
+      sourceUnit: null,
+      effect: null,
+      validTargets: [],
+      message: '',
+      resolveCallback: null,
+      cancelCallback: null
+    };
   }
   
   // Prepare deck by converting card definitions to actual card instances
   prepareDeck(deckDefinition) {
     const deck = [];
-    
+    if (!deckDefinition || !deckDefinition.cards) {
+      console.error("Invalid deckDefinition or missing cards array:", deckDefinition);
+      return deck; // Return empty deck to prevent further errors
+    }
     deckDefinition.cards.forEach(cardEntry => {
-      for (let i = 0; i < cardEntry.count; i++) {
-        const card = { ...cardEntry };
-        delete card.count;
-        deck.push(card);
+      const fullCard = getCardByName(cardEntry.name);
+      if (fullCard) {
+        for (let i = 0; i < cardEntry.count; i++) {
+          // Push a copy of the full card object for each count
+          deck.push({ ...fullCard }); 
+        }
+      } else {
+        console.warn(`Card named "${cardEntry.name}" not found in allCards. Skipping.`);
       }
     });
-    
     return deck;
   }
   
@@ -350,179 +359,75 @@ playCard(cardIndex, row, col) {
     return { success: true, oldRow, oldCol, newRow, newCol };
   }
   
-  // Attack with a unit
-  attackWithUnit(unit, target) {
-    console.log('[Game] attackWithUnit called:', { unit, target, phase: this.currentPhase });
-    // Check if it's battle phase
-    if (this.currentPhase !== PHASES.BATTLE) {
-      console.warn('[Game] Not in battle phase');
-      return { success: false, reason: 'Not in battle phase' };
-    }
-    // Check if unit belongs to current player
-    if (unit.player !== this.getCurrentPlayer().id) {
-      console.warn('[Game] Not your unit');
-      return { success: false, reason: 'Not your unit' };
-    }
-    // Check if unit has already attacked
-    if (unit.hasAttacked) {
-      console.warn('[Game] Unit has already attacked');
-      return { success: false, reason: 'Unit has already attacked' };
-    }
-    // Get valid targets for the attack
-    const validTargets = Effects.getPotentialAttackTargets(unit, this);
-    console.log('[Game] Valid targets:', validTargets);
-    // Check if target is valid
-    const isValidTarget = validTargets.some(t => 
-      (t.isPlayerHealth && target.isPlayerHealth && t.row === target.row && t.col === target.col) ||
-      (!t.isPlayerHealth && !target.isPlayerHealth && t.id === target.id)
-    );
-    if (!isValidTarget) {
-      console.warn('[Game] Invalid target', { target, validTargets });
-      return { success: false, reason: 'Invalid target' };
-    }
-    
-    // Check for taunt units
-    const hasTauntTargets = validTargets.some(t => !t.isPlayerHealth && t.hasTaunt && t.hasTaunt());
-    
-    if (hasTauntTargets && (!target.hasTaunt || !target.hasTaunt())) {
-        return { success: false, reason: 'Must attack taunt units first' };
-    }
+  // Attack with a unit (now async, unified effect/targeting system)
+  async attackWithUnit(unit, target) {
+    if (!unit || !target) return { success: false };
 
-    // --- STRIKE EFFECTS ---
-    const strikeEffects = unit.effects.filter(effect => effect.type === 'strike');
-    let strikeHandled = false;
+    // --- STRIKE EFFECTS (before attack) ---
+    const strikeEffects = unit.effects?.filter(e => e.type === 'strike') || [];
     for (const effect of strikeEffects) {
-        if (this.board && typeof this.board.animateEffectTrigger === 'function') {
-          this.board.animateEffectTrigger(unit, 'strike');
+      if (effect.requiresTargeting) {
+        const selectedTarget = await this.initiateTargeting(unit, effect);
+        if (selectedTarget) {
+          Effects.executeEffect(effect, unit, selectedTarget, this);
         }
+      } else {
+        // If not targeting, apply to the attack target
+        const targetUnit = this.getUnitAt(target.row, target.col);
+        if (targetUnit) {
+          Effects.executeEffect(effect, unit, targetUnit, this);
+        }
+      }
+    }
+
+    // --- PERFORM THE ATTACK ---
+    const targetUnit = this.getUnitAt(target.row, target.col);
+    if (!targetUnit) return { success: false, reason: 'Target not found' };
+
+    const targetDied = targetUnit.takeDamage(unit.attack);
+    const thisDied = unit.takeDamage(targetUnit.attack);
+
+    // --- DEATHSTRIKE EFFECTS (on attacker, if target died) ---
+    if (targetDied) {
+      const deathstrikeEffects = unit.effects?.filter(e => e.type === 'deathstrike') || [];
+      for (const effect of deathstrikeEffects) {
         if (effect.requiresTargeting) {
-            const validStrikeTargets = Effects.getValidTargets(effect, unit, this);
-            if (validStrikeTargets.length > 0) {
-                this.enterTargetingMode(
-                    unit,
-                    effect,
-                    validStrikeTargets,
-                    this.getCurrentPlayer(),
-                    (selectedTarget) => {
-                        Effects.handleStrike(unit, effect, this, selectedTarget);
-                        // After targeting, continue with the attack
-                        this.attackWithUnit(unit, target);
-                    }
-                );
-                return { success: true, requiresTargeting: true, effect, validTargets: validStrikeTargets };
-            }
+          const selectedTarget = await this.initiateTargeting(unit, effect);
+          if (selectedTarget) {
+            Effects.executeEffect(effect, unit, selectedTarget, this);
+          }
         } else {
-            Effects.handleStrike(unit, effect, this);
-            strikeHandled = true;
+          Effects.executeEffect(effect, unit, targetUnit, this);
         }
-    }
-    if (!strikeHandled && strikeEffects.length > 0) {
-        // If there were strike effects but none handled, skip
+      }
+
+      // Remove the killed unit
+      const player = this.players.find(p => p.id === targetUnit.player);
+      if (player) player.removeUnit(targetUnit);
+
+      // --- DEATHBLOW EFFECTS (on the dead unit) ---
+      const deathblowEffects = targetUnit.effects?.filter(e => e.type === 'deathblow') || [];
+      for (const effect of deathblowEffects) {
+        if (effect.requiresTargeting) {
+          const selectedTarget = await this.initiateTargeting(targetUnit, effect);
+          if (selectedTarget) {
+            Effects.executeEffect(effect, targetUnit, selectedTarget, this);
+          }
+        } else {
+          // If not targeting, apply to the attacker (or as per your design)
+          Effects.executeEffect(effect, targetUnit, unit, this);
+        }
+      }
     }
 
-    // Handle spawn tile attack
-    if (target.isPlayerHealth) {
-        // Deal damage to player
-        const opponent = this.getOpponentPlayer();
-        const damage = unit.attack;
-        const defeated = opponent.takeDamage(damage);
-        
-        // Mark unit as having attacked
-        unit.hasAttacked = true;
-        
-        if (defeated) {
-            this.endGame(unit.player);
-            return { 
-                success: true, 
-                gameOver: true, 
-                winner: unit.player, 
-                reason: 'Opponent health reduced to 0' 
-            };
-        }
-        
-        return { 
-            success: true, 
-            targetType: 'player', 
-            damage, 
-            remainingHealth: opponent.health 
-        };
+    // --- REMOVE ATTACKER IF IT DIED ---
+    if (thisDied) {
+      const player = this.players.find(p => p.id === unit.player);
+      if (player) player.removeUnit(unit);
+      return { success: true, thisDied: true };
     }
 
-    // Handle unit attack
-    const result = unit.performAttack(target);
-    
-    // --- DEATHBLOW/DEATHSTRIKE EFFECTS ---
-    if (result.targetDied) {
-        const targetPlayer = this.players.find(p => p.id === target.player);
-        if (targetPlayer) {
-            targetPlayer.removeUnit(target);
-            
-            // First, check for deathstrike effects on the attacker
-            const deathstrikeEffects = unit.effects.filter(effect => effect.type === 'deathstrike');
-            if (deathstrikeEffects.length > 0) {
-                if (this.board && typeof this.board.animateEffectTrigger === 'function') {
-                  this.board.animateEffectTrigger(unit, 'deathstrike');
-                }
-                for (const effect of deathstrikeEffects) {
-                    // Ensure requiresTargeting is true for deathstrike effects
-                    if (!effect.requiresTargeting) {
-                        effect.requiresTargeting = true;
-                    }
-                    
-                    const validDeathstrikeTargets = Effects.getValidTargets(effect, unit, this);
-                    if (validDeathstrikeTargets.length > 0) {
-                        this.enterTargetingMode(
-                            unit,
-                            effect,
-                            validDeathstrikeTargets,
-                            this.getCurrentPlayer(),
-                            (selectedTarget) => {
-                                Effects.handleDeathStrike(unit, effect, this, selectedTarget);
-                            }
-                        );
-                        return { success: true, requiresTargeting: true, effect, validTargets: validDeathstrikeTargets };
-                    }
-                }
-            }
-            
-            // Then check for deathblow effects on the killed unit
-            const deathblowEffects = target.effects.filter(effect => effect.type === 'deathblow');
-            if (deathblowEffects.length > 0) {
-              if (this.board && typeof this.board.animateEffectTrigger === 'function') {
-                this.board.animateEffectTrigger(target, 'deathblow');
-              }
-            }
-            for (const effect of deathblowEffects) {
-                if (effect.requiresTargeting) {
-                    const validDeathblowTargets = Effects.getValidTargets(effect, target, this);
-                    if (validDeathblowTargets.length > 0) {
-                        this.enterTargetingMode(
-                            target,
-                            effect,
-                            validDeathblowTargets,
-                            this.getCurrentPlayer(),
-                            (selectedTarget) => {
-                                Effects.triggerDeathblowEffects(target, this, selectedTarget);
-                            }
-                        );
-                        return { success: true, requiresTargeting: true, effect, validTargets: validDeathblowTargets };
-                    }
-                } else {
-                    Effects.triggerDeathblowEffects(target, this);
-                }
-            }
-        }
-    }
-    
-    // Check if all units have attacked after this attack
-    const currentPlayer = this.getCurrentPlayer();
-    const allUnitsAttacked = currentPlayer.units.every(u => u.hasAttacked);
-    
-    return { 
-        success: true, 
-        ...result,
-        allUnitsAttacked // Add this flag to inform UI that all units have attacked
-    };
+    return { success: true, targetDied };
   }
   
   // Advance to next phase
@@ -565,10 +470,8 @@ playCard(cardIndex, row, col) {
         break;
     }
     
-    // If this is the first turn and we've completed a full turn for both players
-    if (this.isFirstTurn && this.currentPlayerIndex === 0 && this.currentPhase === PHASES.DRAW) {
-      this.isFirstTurn = false;
-    }
+    // The isFirstTurn flag is now exclusively managed by the endTurn() method
+    // to avoid redundancy and ensure it's set at the precise end of P2's first turn.
     
     return { success: true, phase: this.currentPhase };
   }
@@ -692,24 +595,38 @@ playCard(cardIndex, row, col) {
                 cardPlayed = true;
                 
                 // Handle targeting if needed
-                if (result.requiresTargeting && result.validTargets.length > 0) {
-                  // AI simply picks the first valid target
-                  const target = result.validTargets[0];
-                  this.executeWarshoutEffect(target);
+                if (result.requiresTargeting && this.targetingMode && this.targetingValidTargets && this.targetingValidTargets.length > 0) {
+                  // AI simply picks the first valid target from the targetingValidTargets list
+                  const targetToSelect = this.targetingValidTargets[0];
+                  // Call handleTargetSelection to resolve the targeting choice
+                  this.handleTargetSelection(targetToSelect);
+                  // Note: cardPlayed remains true. The game state (currentPhase) was 'targeting'.
+                  // handleTargetSelection will call exitTargetingMode and restore the originalPhase (likely PLAY).
                 }
               }
               
-              break;
+              break; // Break from column search once a card attempt (play or failed play) is made for this found card.
             }
           }
         }
-      } while (cardPlayed && ai.hand.some(card => card.cost <= ai.mana));
+        // Loop continues if a card was successfully played and there are still affordable cards.
+        // If targeting occurred, the phase is restored by exitTargetingMode.
+      } while (cardPlayed && ai.hand.some(card => card.cost <= ai.mana) && !this.targetingMode); // Stop if targeting mode is active
       
+      // If AI entered targeting mode and it's still somehow active (e.g. callback didn't run or error), exit it to be safe.
+      if (this.targetingMode) {
+          this.exitTargetingMode();
+      }
+
       // Move to battle phase
       this.nextPhase();
       
       // Battle phase - AI attacks with all units that can attack
-      ai.units.forEach(unit => {
+      const unitsToAttack = [...ai.units]; // Create a copy to iterate over, as unit removal can occur
+
+      unitsToAttack.forEach(unit => {
+        if (!unit || unit.hasAttacked || !ai.units.includes(unit)) return; // Check if unit is still valid and hasn't attacked
+
         const targets = Effects.getPotentialAttackTargets(unit, this);
         
         if (targets.length > 0) {
@@ -719,15 +636,38 @@ playCard(cardIndex, row, col) {
           if (playerHealthTarget) {
             this.attackWithUnit(unit, playerHealthTarget);
           } else {
-            // Otherwise, pick the highest value target
-            // Simple heuristic: lowest health / highest attack = best target
-            const bestTarget = targets.reduce((best, current) => {
-              const bestValue = best.health / best.attack;
-              const currentValue = current.health / current.attack;
+            // Otherwise, pick a unit target using a refined heuristic
+            const unitTargets = targets.filter(t => !t.isPlayerHealth && t.health > 0); // Ensure target is a unit and alive
+            if (unitTargets.length === 0) return; // No valid unit targets
+
+            const bestTarget = unitTargets.reduce((best, current) => {
+              if (!best) return current; // First valid target becomes the initial best
+
+              // Heuristic: prioritize targets that can be killed, then higher attack, then lower health.
+              // This is a more complex heuristic example. The original one is also acceptable if 0 attack is handled.
+              const canKillCurrent = unit.attack >= current.health;
+              const canKillBest = unit.attack >= best.health;
+
+              if (canKillCurrent && !canKillBest) return current;
+              if (!canKillCurrent && canKillBest) return best;
+
+              if (canKillCurrent && canKillBest) { // Both can be killed, prefer higher attack
+                if (current.attack > best.attack) return current;
+                if (best.attack > current.attack) return best;
+              }
+              
+              // If neither can be killed, or if killability and attack are same, use original heuristic (safe division)
+              const currentAttackValue = current.attack === 0 ? 0.001 : current.attack;
+              const bestAttackValue = best.attack === 0 ? 0.001 : best.attack;
+              const currentValue = current.health / currentAttackValue;
+              const bestValue = best.health / bestAttackValue;
+              
               return currentValue < bestValue ? current : best;
-            }, targets[0]);
+            }, null); // Start with null
             
-            this.attackWithUnit(unit, bestTarget);
+            if (bestTarget) { // Ensure a target was selected
+              this.attackWithUnit(unit, bestTarget);
+            }
           }
         }
       });
@@ -816,12 +756,15 @@ playCard(cardIndex, row, col) {
     this.originalPhase = this.currentPhase;
     
     // Set targeting mode state
-    this.targetingMode = true;
-    this.targetingUnit = unit;
-    this.targetingEffect = effect;
-    this.targetingPlayer = player;
-    this.targetingValidTargets = validTargets;
-    this.targetingCallback = callback;
+    this.targetingMode = {
+      active: true,
+      sourceUnit: unit,
+      effect: effect,
+      validTargets: validTargets,
+      message: this.getTargetingMessage(effect, unit),
+      resolveCallback: callback,
+      cancelCallback: null
+    };
     
     // Change phase to targeting
     this.currentPhase = 'targeting';
@@ -830,13 +773,15 @@ playCard(cardIndex, row, col) {
   }
 
   exitTargetingMode() {
-    // Clear targeting mode state
-    this.targetingMode = false;
-    this.targetingUnit = null;
-    this.targetingEffect = null;
-    this.targetingPlayer = null;
-    this.targetingValidTargets = [];
-    this.targetingCallback = null;
+    this.targetingMode = {
+      active: false,
+      sourceUnit: null,
+      effect: null,
+      validTargets: [],
+      message: '',
+      resolveCallback: null,
+      cancelCallback: null
+    };
     
     // Restore original phase
     this.currentPhase = this.originalPhase;
@@ -845,22 +790,80 @@ playCard(cardIndex, row, col) {
   }
 
   handleTargetSelection(target) {
-    if (!this.targetingMode || !this.targetingCallback) {
+    const effectBeingHandled = this.targetingMode.effect; // Store the effect
+    if (!this.targetingMode.active || !this.targetingMode.resolveCallback) {
       return { success: false, reason: 'Not in targeting mode' };
     }
     
     // Check if target is valid
-    if (!this.targetingValidTargets.some(t => t.id === target.id)) {
+    if (!this.targetingMode.validTargets.some(t => t.id === target.id)) {
       return { success: false, reason: 'Invalid target' };
     }
     
     // Execute the callback with the selected target
-    this.targetingCallback(target);
+    this.targetingMode.resolveCallback(target);
     
     // Exit targeting mode
     this.exitTargetingMode();
     
-    return { success: true };
+    // Return success and the type of effect handled
+    return { success: true, effectType: effectBeingHandled ? effectBeingHandled.type : null };
+  }
+
+  async initiateTargeting(sourceUnit, effect) {
+    if (!sourceUnit || !effect || !effect.requiresTargeting) {
+      console.warn('Attempted to initiate targeting without valid source or effect, or effect does not require targeting.');
+      return null;
+    }
+    const validTargets = Effects.getValidTargets(effect, sourceUnit, this);
+    if (!validTargets || validTargets.length === 0) {
+      this.gameLog?.addLog(`${sourceUnit.cardName}'s ${effect.type} effect has no valid targets.`);
+      return null;
+    }
+    this.targetingMode = {
+      active: true,
+      sourceUnit,
+      effect,
+      validTargets,
+      message: this.getTargetingMessage(effect, sourceUnit),
+      resolveCallback: null,
+      cancelCallback: null
+    };
+    this.gameLog?.addLog(this.targetingMode.message);
+    this.updateUI?.();
+    return new Promise((resolve, reject) => {
+      this.targetingMode.resolveCallback = (targetUnit) => {
+        this.exitTargetingMode();
+        resolve(targetUnit);
+      };
+      this.targetingMode.cancelCallback = () => {
+        this.exitTargetingMode();
+        reject(new Error('Targeting cancelled by player.'));
+      };
+    });
+  }
+
+  getTargetingMessage(effect, sourceUnit) {
+    if (!effect || !sourceUnit) return 'Select a target';
+    let msg = `Select a target for ${sourceUnit.cardName}'s ${effect.type}`;
+    if (effect.action) msg += ` (${effect.action})`;
+    msg += ' effect.';
+    if (effect.yar) msg += ` (YAR Range: ${Effects.YAR_RANGE} rows from spawn)`;
+    return msg;
+  }
+
+  handleUnitClick(unit) {
+    if (
+      !this.targetingMode.active ||
+      !this.targetingMode.sourceUnit ||
+      !this.targetingMode.effect ||
+      !this.targetingMode.validTargets.includes(unit)
+    ) {
+      return;
+    }
+    if (this.targetingMode.resolveCallback) {
+      this.targetingMode.resolveCallback(unit);
+    }
   }
 }
 

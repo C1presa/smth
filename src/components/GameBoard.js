@@ -306,17 +306,18 @@ class GameBoard {
       'racer': '🏎️',
       'lurker': '👁️'
     };
-    // ...rest of y
     const { row, col } = unit;
-    if (row === null || col === null) return;
+    if (row === null || col === null || unit.health <= 0) return; // Don't render dead units
+    
     const tile = this.tiles[row][col];
+    if (!tile) return;
 
     // Remove any existing unit
     const oldUnit = tile.querySelector('.unit');
     if (oldUnit) oldUnit.remove();
 
     // Get card data
-    const card = unit.getCard ? unit.getCard() : unit; 
+    const card = unit.getCard ? unit.getCard() : unit;
     
     // Define colors for archetypes with richer gradients
     const archetypeGradients = {
@@ -1031,22 +1032,6 @@ class GameBoard {
     this.animateMultipleUnitMovements(movements);
   }
 
-  // Add new method to handle effect targeting cancellation
-  cancelEffectTargeting() {
-    if (this.currentHighlightType === 'target') {
-      // Restore original phase
-      this.game.currentPhase = this.originalPhase;
-      
-      // Clear all targeting state
-      this.clearHighlights();
-      this.selectedUnit = null;
-      this.selectedTile = null;
-      
-      // Update the board
-      this.update();
-    }
-  }
-
   // Method to animate a spawn point attack
   animateSpawnAttack(attacker, targetRow, targetCol) {
     // Find the attacker element
@@ -1302,82 +1287,114 @@ class GameBoard {
   }
 
   animateStrikeEffect(container) {
-    // Create multiple lightning particles
-    for (let i = 0; i < 5; i++) {
-      const particle = document.createElement('div');
-      particle.className = 'particle lightning';
-      particle.style.setProperty('--x-offset', `${(Math.random() - 0.5) * 40}px`);
-      particle.style.setProperty('--rotation', `${(Math.random() - 0.5) * 60}deg`);
-      container.appendChild(particle);
-    }
+    const effect = document.createElement('div');
+    effect.className = 'strike-effect';
+    container.appendChild(effect);
+
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'strike-impact';
+    container.appendChild(impact);
+
+    // Remove effects after animation
+    setTimeout(() => {
+        effect.remove();
+        impact.remove();
+    }, 1000);
   }
 
   animateDeathstrikeEffect(container) {
-    // Create skull and purple sparks
     const skull = document.createElement('div');
-    skull.className = 'skull-rise';
-    skull.textContent = '☠️';
+    skull.className = 'deathstrike-skull';
+    skull.textContent = '💀';
     container.appendChild(skull);
 
-    // Add purple sparks
-    for (let i = 0; i < 8; i++) {
-      const spark = document.createElement('div');
-      spark.className = 'particle purple-spark';
-      spark.style.setProperty('--x-offset', `${(Math.random() - 0.5) * 60}px`);
-      spark.style.setProperty('--y-offset', `${(Math.random() - 0.5) * 60}px`);
-      container.appendChild(spark);
-    }
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'deathstrike-impact';
+    container.appendChild(impact);
+
+    // Animate skull
+    skull.style.animation = 'deathstrike-effect 1s ease-out forwards';
+
+    // Remove effects after animation
+    setTimeout(() => {
+        skull.remove();
+        impact.remove();
+    }, 1000);
   }
 
   animateDeathblowEffect(container) {
-    // Create explosion ring
-    const ring = document.createElement('div');
-    ring.className = 'explosion-ring';
-    container.appendChild(ring);
-
-    // Add ember particles
-    for (let i = 0; i < 12; i++) {
-      const ember = document.createElement('div');
-      ember.className = 'particle ember';
-      ember.style.setProperty('--x-offset', `${(Math.random() - 0.5) * 80}px`);
-      ember.style.setProperty('--y-offset', `${(Math.random() - 0.5) * 80}px`);
-      container.appendChild(ember);
+    // Create particles
+    for (let i = 0; i < 8; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'deathblow-particle';
+        particle.style.setProperty('--angle', `${(i * 45)}deg`);
+        container.appendChild(particle);
     }
+
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'deathblow-impact';
+    container.appendChild(impact);
+
+    // Remove effects after animation
+    setTimeout(() => {
+        container.querySelectorAll('.deathblow-particle').forEach(p => p.remove());
+        impact.remove();
+    }, 1000);
   }
 
   animateWarshoutEffect(container) {
-    // Create expanding sound waves
-    for (let i = 0; i < 3; i++) {
-      const wave = document.createElement('div');
-      wave.className = 'particle sound-wave';
-      wave.style.animationDelay = `${i * 0.2}s`;
-      container.appendChild(wave);
-    }
+    const ring = document.createElement('div');
+    ring.className = 'warshout-ring';
+    container.appendChild(ring);
+
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'warshout-impact';
+    container.appendChild(impact);
+
+    // Remove effects after animation
+    setTimeout(() => {
+        ring.remove();
+        impact.remove();
+    }, 1000);
   }
 
   animateTauntEffect(container) {
-    // Create shield pulse effect
     const shield = document.createElement('div');
-    shield.className = 'shield-pulse';
+    shield.className = 'taunt-shield';
     shield.textContent = '🛡️';
-    shield.style.fontSize = '32px';
-    shield.style.position = 'absolute';
-    shield.style.left = '50%';
-    shield.style.top = '50%';
-    shield.style.transform = 'translate(-50%, -50%)';
     container.appendChild(shield);
+
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'taunt-impact';
+    container.appendChild(impact);
+
+    // Remove effects after animation
+    setTimeout(() => {
+        shield.remove();
+        impact.remove();
+    }, 1000);
   }
 
   animateGenericEffect(container) {
-    // Create a simple pulse effect
-    const pulse = document.createElement('div');
-    pulse.className = 'generic-pulse';
-    pulse.style.position = 'absolute';
-    pulse.style.inset = '0';
-    pulse.style.borderRadius = 'inherit';
-    pulse.style.background = 'rgba(255, 255, 255, 0.2)';
-    pulse.style.animation = 'fade-pulse 1s ease-out';
-    container.appendChild(pulse);
+    const effect = document.createElement('div');
+    effect.className = 'generic-effect';
+    container.appendChild(effect);
+
+    // Add impact effect
+    const impact = document.createElement('div');
+    impact.className = 'generic-impact';
+    container.appendChild(impact);
+
+    // Remove effects after animation
+    setTimeout(() => {
+        effect.remove();
+        impact.remove();
+    }, 1000);
   }
 
   animateAttack(attacker, target) {
@@ -1461,6 +1478,34 @@ class GameBoard {
       `;
       document.head.appendChild(style);
     }
+  }
+
+  // Highlight valid target units for targeting mode
+  highlightValidTargets(targets) {
+    this.clearValidTargets(); // Clear previous highlights
+    this.validTargets = targets;
+    this.currentHighlightType = 'target';
+    targets.forEach(unit => {
+      const unitElement = document.getElementById(`unit-${unit.id}`);
+      if (unitElement) {
+        unitElement.classList.add('highlight-target');
+      }
+    });
+    // Optionally, highlight tiles as well if desired
+  }
+
+  // Clear all valid target highlights
+  clearValidTargets() {
+    if (Array.isArray(this.validTargets)) {
+      this.validTargets.forEach(unit => {
+        const unitElement = document.getElementById(`unit-${unit.id}`);
+        if (unitElement) {
+          unitElement.classList.remove('highlight-target');
+        }
+      });
+    }
+    this.validTargets = [];
+    this.currentHighlightType = null;
   }
 }
 
